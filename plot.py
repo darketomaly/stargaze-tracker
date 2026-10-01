@@ -8,7 +8,7 @@
 from pathlib import Path
 
 from fetch import FILE
-from plot_data import load_observation
+from plot_data import load_observation, rows
 from plot_render import render
 
 
@@ -21,9 +21,11 @@ FONT_DIR = HERE / "fonts"
 
 
 def main():
-    observation = load_observation(DATA)
-    render(observation, SPRITE, FONT_DIR, OUT / PICTURE)
-    print(f"saved out/{PICTURE}")
+    observations = [
+        load_observation(DATA, row_index)
+        for row_index in range(len(rows(DATA)))
+    ]
+    render(observations, SPRITE, FONT_DIR, OUT / PICTURE, initial_index=11)
 
 
 if __name__ == "__main__":

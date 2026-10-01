@@ -9,6 +9,7 @@ from matplotlib import font_manager
 from matplotlib.image import imread
 from matplotlib.patches import Circle, Rectangle
 from matplotlib.transforms import Affine2D
+from matplotlib.widgets import Button, Slider
 import numpy as np
 
 from plot_data import Observation, TIMEZONE, lerp_color
@@ -112,14 +113,14 @@ def draw_score_panel(ax, score):
             color=score_color)
 
 
-def render(observation, sprite_path, font_dir, output_path):
-    register_fonts(font_dir)
+def render_image(observation, sprite_path, font_dir):
     background = lerp_color(
         (0.01, 0.02, 0.10),
         (0.35, 0.70, 0.95),
         observation.daylight_brightness,
     )
-    fig, ax = plt.subplots(figsize=(10, 8), facecolor=background)
+    fig, ax = plt.subplots(figsize=(10, 8), dpi=150, facecolor=background)
+    fig.subplots_adjust(0, 0, 1, 1)
     draw_sky(ax, background)
 
     draw_stars(ax, observation.stargaze_score)
@@ -142,8 +143,49 @@ def render(observation, sprite_path, font_dir, output_path):
     ax.set_xlim(0, 8)
     ax.set_ylim(0, 6)
     ax.axis("off")
-    fig.tight_layout()
-    output_path.parent.mkdir(exist_ok=True)
-    fig.savefig(output_path, dpi=150)
+    fig.canvas.draw()
+    image = np.asarray(fig.canvas.buffer_rgba()).copy()
+    plt.close(fig)
+    return image
+
+
+def render(observations, sprite_path, font_dir, output_path, initial_index=0):
+    register_fonts(font_dir)
+    images = [
+        render_image(observation, sprite_path, font_dir)
+        for observation in observations
+    ]
+    initial_index = max(0, min(initial_index, len(images) - 1))
+    fig, ax = plt.subplots(figsize=(10, 8))
+    fig.subplots_adjust(bottom=0.15)
+    image_artist = ax.imshow(images[initial_index])
+    ax.axis("off")
+    slider_ax = fig.add_axes((0.2, 0.04, 0.6, 0.04))
+    save_ax = fig.add_axes((0.83, 0.035, 0.1, 0.05))
+    slider = Slider(
+        slider_ax,
+        "Time",
+        0,
+        len(images) - 1,
+        valinit=initial_index,
+        valstep=1,
+        valfmt="%d",
+    )
+    save_button = Button(save_ax, "Save")
+
+    def update(index):
+        index = round(index)
+        image_artist.set_data(images[index])
+        slider.valtext.set_text(observations[index].readable_time)
+        fig.canvas.draw_idle()
+
+    def save(_event):
+        output_path.parent.mkdir(exist_ok=True)
+        plt.imsave(output_path, images[round(slider.val)])
+        print(f"saved {output_path}")
+
+    slider.on_changed(update)
+    save_button.on_clicked(save)
+    slider.valtext.set_text(observations[initial_index].readable_time)
     plt.show()
     plt.close(fig)

@@ -47,11 +47,15 @@ def lerp_color(start, end, amount):
     )
 
 
-def load_observation(path):
+def load_observation(path, row_index=None):
     table = rows(path)
     sunrise = datetime.fromisoformat(table[0]["sunrise"]).replace(tzinfo=HKT)
     sunset = datetime.fromisoformat(table[0]["sunset"]).replace(tzinfo=HKT)
-    selected = max(table, key=lambda row: float(row["stargaze_score"]))
+    selected = (
+        table[row_index]
+        if row_index is not None
+        else max(table, key=lambda row: float(row["stargaze_score"]))
+    )
     observation_time = datetime.fromisoformat(selected["time"]).replace(tzinfo=HKT)
     daylight_progress = (
         (observation_time - sunrise).total_seconds()
