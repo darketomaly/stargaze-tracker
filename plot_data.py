@@ -22,6 +22,7 @@ class Observation:
     moon_phase: float
     moon_illumination: float
     moon_altitude: float
+    moon_azimuth: float
     moon_name: str
     sun_altitude: float
     sun_azimuth: float
@@ -78,6 +79,7 @@ def load_observation(path, row_index=None):
         moon_phase=float(selected["moon_phase"]),
         moon_illumination=float(selected["moon_illumination"]),
         moon_altitude=float(selected["moon_altitude"]),
+        moon_azimuth=float(selected["moon_azimuth"]),
         moon_name=selected["moon_name"],
         sun_altitude=float(selected["sun_altitude"]),
         sun_azimuth=float(selected["sun_azimuth"]),

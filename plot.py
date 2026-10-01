@@ -22,6 +22,11 @@ SPRITE = HERE / "sprites" / "cloud.png"
 FONT_DIR = HERE / "fonts"
 
 
+def interpolate_angle(start, end, fraction):
+    difference = (end - start + 180) % 360 - 180
+    return (start + difference * fraction) % 360
+
+
 def interpolate_observation(start, end, fraction):
     time = start.time + timedelta(minutes=15 * round(fraction * 4))
     return replace(
@@ -48,6 +53,9 @@ def interpolate_observation(start, end, fraction):
         moon_altitude=(
             start.moon_altitude
             + (end.moon_altitude - start.moon_altitude) * fraction
+        ),
+        moon_azimuth=(
+            interpolate_angle(start.moon_azimuth, end.moon_azimuth, fraction)
         ),
         sun_altitude=(
             start.sun_altitude

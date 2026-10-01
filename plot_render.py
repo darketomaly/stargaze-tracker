@@ -130,16 +130,14 @@ def render_image(observation, sprite_path, width, height):
     draw_stars(ax, observation.stargaze_score)
     sun_x = observation.sun_azimuth / 360 * 8
     sun_y = max(0, min(6, observation.sun_altitude / 90 * 6))
-    moon_x, moon_y = 7, 5
+    moon_x = observation.moon_azimuth / 360 * 8
+    moon_y = max(0, min(6, observation.moon_altitude / 90 * 6))
     if observation.sun_altitude > 0:
         ax.add_patch(Circle((sun_x, sun_y), 0.45, color="#ffd34e"))
-    ax.imshow(moon_image(observation.moon_phase),
-              extent=(moon_x - 0.45, moon_x + 0.45,
-                      moon_y - 0.45, moon_y + 0.45))
-    ax.text(moon_x, moon_y - 0.7,
-            "Visible" if observation.moon_altitude > 0
-            else "Moon below horizon\nmoonlight not included in score",
-            ha="center", va="top", fontsize=11, color="#ffffff")
+    if observation.moon_altitude > 0:
+        ax.imshow(moon_image(observation.moon_phase),
+                  extent=(moon_x - 0.45, moon_x + 0.45,
+                          moon_y - 0.45, moon_y + 0.45))
     draw_clouds(ax, observation.coverage_fraction, sprite_path)
     draw_information_panel(ax, observation)
     draw_score_panel(ax, observation.stargaze_score)
