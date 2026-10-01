@@ -13,6 +13,10 @@ would do, silently drop the rows it could not parse? -->
 Matplotlib draws the generated picture, and the Rajdhani font files from Google Fonts
 are bundled in `fonts/` so the output is consistent across machines.
 
+The plotting code is separated into `plot.py` for orchestration, `plot_data.py` for
+loading and preparing the observation, and `plot_render.py` for drawing the scene
+and panels.
+
 ## Kept
 
 Rajdhani was kept because its compact, geometric letterforms fit the space-themed
