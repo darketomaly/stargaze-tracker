@@ -103,7 +103,7 @@ def main():
 
     fig, ax = plt.subplots(figsize=(10, 8), facecolor=background)
     ax.set_facecolor(background)
-    star_variation = random.Random(84)
+    star_variation = random.Random()
     star_count = round(120 * max(0, min(stargaze_score, 100)) / 100)
     stars_x = [star_variation.uniform(0, 8) for _ in range(star_count)]
     stars_y = [star_variation.uniform(0, 6) for _ in range(star_count)]
@@ -124,7 +124,7 @@ def main():
             else "Moon below horizon\nmoonlight not included in score",
             ha="center", va="top", fontsize=11, color="#ffffff")
     cloud = imread(SPRITE)
-    variation = random.Random(42)
+    variation = random.Random()
     positions = [(x, y) for x in range(8) for y in range(6)]
     variation.shuffle(positions)
     cloud_count = round(len(positions) * coverage_fraction)
