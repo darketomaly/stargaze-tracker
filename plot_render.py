@@ -75,12 +75,13 @@ def draw_clouds(ax, coverage_fraction, sprite_path):
                      + ax.transData)
         ax.imshow(cloud, extent=(left, left + 1, bottom, bottom + 1),
                   transform=transform,
-                  alpha=variation.uniform(0.55, 1.0))
+                  alpha=variation.uniform(0.55, 1.0), zorder=2)
 
 
 def draw_information_panel(ax, observation):
     ax.add_patch(Rectangle((-0.05, 3.72), 3.35, 2.48,
-                           facecolor="black", alpha=0.55, edgecolor="none"))
+                           facecolor="black", alpha=0.55, edgecolor="none",
+                           zorder=3))
     info_rows = (
         (f"Time ({TIMEZONE})", observation.readable_time),
         ("Cloud coverage", f"{observation.cloud_coverage:.0f}%"),
@@ -92,25 +93,26 @@ def draw_information_panel(ax, observation):
     for row, (label, value) in enumerate(info_rows):
         y = 5.95 - row * 0.25
         ax.text(0.05, y, f"{label}:", ha="left", va="top",
-                fontsize=11, color="#ffffff")
+                fontsize=11, color="#ffffff", zorder=4)
         ax.text(2.15, y, value, ha="left", va="top",
-                fontsize=11, color="#bfbfbf")
+                fontsize=11, color="#bfbfbf", zorder=4)
     ax.text(0.05, 4.15, "Not considered:",
-            ha="left", va="top", fontsize=11, color="#ffffff")
+            ha="left", va="top", fontsize=11, color="#ffffff", zorder=4)
     ax.text(0.05, 3.9, "Light pollution, target altitude",
-            ha="left", va="top", fontsize=11, color="#bfbfbf")
+            ha="left", va="top", fontsize=11, color="#bfbfbf", zorder=4)
 
 
 def draw_score_panel(ax, score):
     score_color = "#43d17a" if score >= 50 else "#ff5c5c"
     ax.add_patch(Rectangle((-0.05, 0.18), 2.2, 0.55,
-                           facecolor="black", alpha=0.65, edgecolor="none"))
+                           facecolor="black", alpha=0.65, edgecolor="none",
+                           zorder=3))
     ax.text(0.05, 0.35, "Chance of good stargazing:",
             ha="left", va="bottom", fontsize=11, fontweight="bold",
-            color="#ffffff")
+            color="#ffffff", zorder=4)
     ax.text(1.85, 0.35, f"{score:.0f}%",
             ha="left", va="bottom", fontsize=11, fontweight="bold",
-            color=score_color)
+            color=score_color, zorder=4)
 
 
 def render_image(observation, sprite_path, width, height):
@@ -133,11 +135,25 @@ def render_image(observation, sprite_path, width, height):
     moon_x = observation.moon_azimuth / 360 * 8
     moon_y = max(0, min(6, observation.moon_altitude / 90 * 6))
     if observation.sun_altitude > 0:
-        ax.add_patch(Circle((sun_x, sun_y), 0.45, color="#ffd34e"))
+        ax.add_patch(Circle(
+            (sun_x, sun_y), 0.45, facecolor="#ffd34e",
+            edgecolor="#000000", linewidth=1.5, zorder=1,
+        ))
     if observation.moon_altitude > 0:
-        ax.imshow(moon_image(observation.moon_phase),
+        image = moon_image(observation.moon_phase)
+        ax.imshow(image,
                   extent=(moon_x - 0.45, moon_x + 0.45,
-                          moon_y - 0.45, moon_y + 0.45))
+                          moon_y - 0.45, moon_y + 0.45), zorder=1)
+        coordinates = np.linspace(-0.45, 0.45, image.shape[0])
+        ax.contour(
+            moon_x + coordinates,
+            moon_y + coordinates,
+            image[..., 3],
+            levels=[0.5],
+            colors="#000000",
+            linewidths=1.5,
+            zorder=1,
+        )
     draw_clouds(ax, observation.coverage_fraction, sprite_path)
     draw_information_panel(ax, observation)
     draw_score_panel(ax, observation.stargaze_score)
