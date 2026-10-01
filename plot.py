@@ -22,7 +22,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 from matplotlib.image import imread
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Rectangle
 from matplotlib.transforms import Affine2D
 import numpy as np
 from fetch import FILE
@@ -122,7 +122,7 @@ def main():
     ax.text(moon_x, moon_y - 0.7,
             "Visible" if moon_altitude > 0
             else "Moon below horizon\nmoonlight not included in score",
-            ha="center", va="top", fontsize=11, color="white")
+            ha="center", va="top", fontsize=11, color="#ffffff")
     cloud = imread(SPRITE)
     variation = random.Random(42)
     positions = [(x, y) for x in range(8) for y in range(6)]
@@ -139,24 +139,35 @@ def main():
                          + ax.transData)
             ax.imshow(cloud, extent=(left, left + 1, bottom, bottom + 1),
                       transform=transform)
-    ax.text(0.05, 5.95,
-            f"Time ({TIMEZONE}): {readable_time}\n"
-            f"Cloud coverage: {cloud_coverage:.0f}%\n"
-            f"Visibility: {visibility}\n"
-            f"Moon illumination: {moon_illumination:.0f}%\n"
-            f"Moon altitude: {moon_altitude:.1f}°\n"
-            f"Moon phase: {first['moon_name']}\n\n"
-            "Not considered:\n"
-            "Light pollution, target altitude",
-            ha="left", va="top", fontsize=11, color="white",
-            bbox=dict(facecolor="black", alpha=0.55, edgecolor="none",
-                      boxstyle="round,pad=0.5"))
+    ax.add_patch(Rectangle((-0.05, 3.72), 3.35, 2.48,
+                           facecolor="black", alpha=0.55, edgecolor="none"))
+    info_rows = (
+        (f"Time ({TIMEZONE})", readable_time),
+        ("Cloud coverage", f"{cloud_coverage:.0f}%"),
+        ("Visibility", visibility),
+        ("Moon illumination", f"{moon_illumination:.0f}%"),
+        ("Moon altitude", f"{moon_altitude:.1f}°"),
+        ("Moon phase", first["moon_name"]),
+    )
+    for row, (label, value) in enumerate(info_rows):
+        y = 5.95 - row * 0.25
+        ax.text(0.05, y, f"{label}:", ha="left", va="top",
+                fontsize=11, color="#ffffff")
+        ax.text(2.15, y, value, ha="left", va="top",
+                fontsize=11, color="#bfbfbf")
+    ax.text(0.05, 4.15, "Not considered:",
+            ha="left", va="top", fontsize=11, color="#ffffff")
+    ax.text(0.05, 3.9, "Light pollution, target altitude",
+            ha="left", va="top", fontsize=11, color="#bfbfbf")
     score_color = "#43d17a" if stargaze_score >= 50 else "#ff5c5c"
-    ax.text(0.05, 0.35, f"Chance of good stargazing: {stargaze_score:.0f}%",
+    ax.add_patch(Rectangle((-0.05, 0.18), 2.2, 0.55,
+                           facecolor="black", alpha=0.65, edgecolor="none"))
+    ax.text(0.05, 0.35, "Chance of good stargazing:",
             ha="left", va="bottom", fontsize=11, fontweight="bold",
-            color=score_color,
-            bbox=dict(facecolor="black", alpha=0.65, edgecolor="none",
-                      boxstyle="round,pad=0.5"))
+            color="#ffffff")
+    ax.text(1.85, 0.35, f"{stargaze_score:.0f}%",
+            ha="left", va="bottom", fontsize=11, fontweight="bold",
+            color=score_color)
     ax.set_xlim(0, 8)
     ax.set_ylim(0, 6)
     ax.axis("off")
