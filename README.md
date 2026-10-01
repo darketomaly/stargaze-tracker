@@ -21,7 +21,12 @@ Data via Open-meteo weather API.
 something away, and naming what yours threw away is the easiest way to sound like
 you know what you did. -->
 
-Shooting star probability percentage and a preview of the sky. For example, if it's cloudy, it will show clouds.
+Chance of good stargazing and a preview of the sky. This percentage is an index
+based on visibility, cloud cover and moonlight; it is not a measured probability.
+For example, if it's cloudy, it will show clouds.
+
+The generated picture uses the [Rajdhani](https://fonts.google.com/specimen/Rajdhani)
+font from Google Fonts for its text.
 
 ## Run it
 

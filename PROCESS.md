@@ -10,6 +10,12 @@ would do, silently drop the rows it could not parse? -->
 
 ## Tools
 
+Matplotlib draws the generated picture, and the Rajdhani font files from Google Fonts
+are bundled in `fonts/` so the output is consistent across machines.
+
 ## Kept
+
+Rajdhani was kept because its compact, geometric letterforms fit the space-themed
+image while remaining readable at the small annotation sizes.
 
 ## Rejected

@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from matplotlib.image import imread
 from matplotlib.patches import Circle
 from matplotlib.transforms import Affine2D
@@ -32,12 +33,19 @@ HERE = Path(__file__).parent
 DATA = HERE / "data" / FILE
 OUT = HERE / "out"
 SPRITE = HERE / "sprites" / "cloud.png"
+FONT_DIR = HERE / "fonts"
 TIMEZONE = "HKT"
 
 def rows(path):
     """Read hourly cloud coverage from the generated CSV."""
     with path.open(encoding="utf-8-sig", newline="") as handle:
         return list(csv.DictReader(handle))
+
+def register_fonts():
+    """Register the bundled Google Fonts family before drawing any text."""
+    for font_name in ("Rajdhani-Regular.ttf", "Rajdhani-Bold.ttf"):
+        font_manager.fontManager.addfont(FONT_DIR / font_name)
+    plt.rcParams["font.family"] = "Rajdhani"
 
 def format_visibility(meters):
     if meters >= 1000:
@@ -63,6 +71,7 @@ def moon_image(phase):
     return image
 
 def main():
+    register_fonts()
     table = rows(DATA)
     hkt = timezone(timedelta(hours=8))
     sunrise = datetime.fromisoformat(table[0]["sunrise"]).replace(tzinfo=hkt)
@@ -112,7 +121,7 @@ def main():
                       moon_y - 0.45, moon_y + 0.45))
     ax.text(moon_x, moon_y - 0.7,
             "Visible" if moon_altitude > 0
-            else "Below horizon\nillumination not considered",
+            else "Moon below horizon\nmoonlight not included in score",
             ha="center", va="top", fontsize=11, color="white")
     cloud = imread(SPRITE)
     variation = random.Random(42)
@@ -139,12 +148,12 @@ def main():
             f"Moon phase: {first['moon_name']}\n\n"
             "Not considered:\n"
             "Light pollution, target altitude",
-            ha="left", va="top", fontsize=14, color="white",
+            ha="left", va="top", fontsize=11, color="white",
             bbox=dict(facecolor="black", alpha=0.55, edgecolor="none",
                       boxstyle="round,pad=0.5"))
     score_color = "#43d17a" if stargaze_score >= 50 else "#ff5c5c"
-    ax.text(0.05, 0.35, f"Stargaze score: {stargaze_score:.0f}%",
-            ha="left", va="bottom", fontsize=20, fontweight="bold",
+    ax.text(0.05, 0.35, f"Chance of good stargazing: {stargaze_score:.0f}%",
+            ha="left", va="bottom", fontsize=11, fontweight="bold",
             color=score_color,
             bbox=dict(facecolor="black", alpha=0.65, edgecolor="none",
                       boxstyle="round,pad=0.5"))
