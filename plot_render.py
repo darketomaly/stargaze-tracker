@@ -37,12 +37,24 @@ def moon_image(phase):
 def draw_stars(ax, score):
     variation = random.Random()
     star_count = round(120 * max(0, min(score, 100)) / 100)
+    if star_count == 0:
+        return
     stars_x = [variation.uniform(0, 8) for _ in range(star_count)]
     stars_y = [variation.uniform(0, 6) for _ in range(star_count)]
     star_sizes = [variation.uniform(3, 14) for _ in range(star_count)]
     star_alphas = [variation.uniform(0.4, 1) for _ in range(star_count)]
     ax.scatter(stars_x, stars_y, s=star_sizes, c="#fff4c2",
                alpha=star_alphas, linewidths=0)
+
+
+def draw_sky(ax, color):
+    variation = random.Random()
+    base = np.array(color)
+    bottom = np.clip(base * variation.uniform(0.82, 0.94), 0, 1)
+    top = np.clip(base * variation.uniform(1.04, 1.18), 0, 1)
+    gradient = np.linspace(bottom, top, 256)[:, np.newaxis, :]
+    ax.imshow(gradient, extent=(0, 8, 0, 6), aspect="auto",
+              interpolation="bicubic", zorder=0)
 
 
 def draw_clouds(ax, coverage_fraction, sprite_path):
@@ -61,7 +73,8 @@ def draw_clouds(ax, coverage_fraction, sprite_path):
                      .rotate_deg_around(center_x, center_y, rotation)
                      + ax.transData)
         ax.imshow(cloud, extent=(left, left + 1, bottom, bottom + 1),
-                  transform=transform)
+                  transform=transform,
+                  alpha=variation.uniform(0.55, 1.0))
 
 
 def draw_information_panel(ax, observation):
@@ -107,7 +120,7 @@ def render(observation, sprite_path, font_dir, output_path):
         observation.daylight_brightness,
     )
     fig, ax = plt.subplots(figsize=(10, 8), facecolor=background)
-    ax.set_facecolor(background)
+    draw_sky(ax, background)
 
     draw_stars(ax, observation.stargaze_score)
     sun_x = observation.sun_azimuth / 360 * 8
