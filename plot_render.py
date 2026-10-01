@@ -113,13 +113,17 @@ def draw_score_panel(ax, score):
             color=score_color)
 
 
-def render_image(observation, sprite_path, font_dir):
+def render_image(observation, sprite_path, width, height):
     background = lerp_color(
         (0.01, 0.02, 0.10),
         (0.35, 0.70, 0.95),
         observation.daylight_brightness,
     )
-    fig, ax = plt.subplots(figsize=(10, 8), dpi=150, facecolor=background)
+    fig, ax = plt.subplots(
+        figsize=(width / 100, height / 100),
+        dpi=100,
+        facecolor=background,
+    )
     fig.subplots_adjust(0, 0, 1, 1)
     draw_sky(ax, background)
 
@@ -149,16 +153,59 @@ def render_image(observation, sprite_path, font_dir):
     return image
 
 
+def preview_size(window):
+    screen_height = None
+    if window is not None and hasattr(window, "winfo_screenheight"):
+        screen_height = window.winfo_screenheight()
+    elif window is not None and hasattr(window, "screen"):
+        screen = window.screen()
+        if screen is not None:
+            screen_height = screen.availableGeometry().height()
+    elif window is not None and hasattr(window, "GetDisplaySize"):
+        screen_height = window.GetDisplaySize()[1]
+
+    height = min(640, round(screen_height * 0.75)) if screen_height else 640
+    return round(height * 1.25), height
+
+
 def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     register_fonts(font_dir)
-    images = [
-        render_image(observation, sprite_path, font_dir)
-        for observation in observations
-    ]
+    window = None
+    width, height = 800, 640
+    fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
+    window = getattr(fig.canvas.manager, "window", None)
+    if window is not None:
+        width, height = preview_size(window)
+        fig.set_size_inches(width / 100, height / 100)
+        if hasattr(window, "resizable"):
+            window.resizable(False, False)
+        elif hasattr(window, "setFixedSize"):
+            window.setFixedSize(width, height)
+        if hasattr(window, "geometry"):
+            window.geometry(f"{width}x{height}")
+
+    ax.axis("off")
+    loading_text = ax.text(
+        0.5, 0.5, "Preparing sky images...", ha="center", va="center",
+        fontsize=14,
+    )
+    plt.show(block=False)
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+    images = []
+    for index, observation in enumerate(observations, start=1):
+        images.append(render_image(observation, sprite_path, width, height))
+        loading_text.set_text(
+            f"Preparing sky images... {index}/{len(observations)}"
+        )
+        fig.canvas.draw_idle()
+        fig.canvas.flush_events()
+
     initial_index = max(0, min(initial_index, len(images) - 1))
-    fig, ax = plt.subplots(figsize=(10, 8))
     fig.subplots_adjust(bottom=0.15)
-    image_artist = ax.imshow(images[initial_index])
+    ax.clear()
+    image_artist = ax.imshow(images[initial_index], interpolation="nearest")
     ax.axis("off")
     slider_ax = fig.add_axes((0.2, 0.04, 0.6, 0.04))
     save_ax = fig.add_axes((0.83, 0.035, 0.1, 0.05))
@@ -173,6 +220,15 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     )
     save_button = Button(save_ax, "Save")
 
+    fig.canvas.draw()
+    image_artist.set_animated(True)
+    background = fig.canvas.copy_from_bbox(ax.bbox)
+
+    def redraw_image(_event=None):
+        fig.canvas.restore_region(background)
+        ax.draw_artist(image_artist)
+        fig.canvas.blit(ax.bbox)
+
     def update(index):
         index = round(index)
         image_artist.set_data(images[index])
@@ -181,11 +237,15 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
 
     def save(_event):
         output_path.parent.mkdir(exist_ok=True)
-        plt.imsave(output_path, images[round(slider.val)])
+        selected = observations[round(slider.val)]
+        image = render_image(selected, sprite_path, 1500, 1200)
+        plt.imsave(output_path, image)
         print(f"saved {output_path}")
 
+    fig.canvas.mpl_connect("draw_event", redraw_image)
     slider.on_changed(update)
     save_button.on_clicked(save)
     slider.valtext.set_text(observations[initial_index].readable_time)
+    redraw_image()
     plt.show()
     plt.close(fig)
