@@ -48,10 +48,10 @@ def moon_image(phase, size):
     return surface
 
 
-def _draw_gradient(surface, color):
+def _draw_gradient(surface, color, seed):
     width, height = surface.get_size()
     base = tuple(color)
-    variation = random.Random()
+    variation = random.Random(seed)
     bottom = _color(tuple(max(0, min(1, value * variation.uniform(.82, .94))) for value in base))
     top = _color(tuple(max(0, min(1, value * variation.uniform(1.04, 1.18))) for value in base))
     for y in range(height):
@@ -83,7 +83,7 @@ def _draw_scene(observation, sprite_path, fonts, size):
     background = lerp_color((.01, .02, .10), (.35, .70, .95),
                              observation.daylight_brightness)
     scene = pygame.Surface(size)
-    _draw_gradient(scene, background)
+    _draw_gradient(scene, background, observation.time.timestamp())
     rng = random.Random(observation.time.timestamp())
     _draw_stars(scene, observation.stargaze_score, rng)
     scale = width / 8
