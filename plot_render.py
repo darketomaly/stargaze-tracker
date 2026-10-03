@@ -15,6 +15,8 @@ from plot_data import TIMEZONE, lerp_color
 
 CLOUD_DRIFT_PERIOD = 60 * 60
 CLOUD_DRIFT_SPEED = 1 / CLOUD_DRIFT_PERIOD
+STAR_DRIFT_PERIOD = 3 * 24 * 60 * 60
+STAR_DRIFT_SPEED = 1 / STAR_DRIFT_PERIOD
 SCENE_ANIMATION_DURATION = 0.45
 STAR_SEED = 317
 
@@ -123,7 +125,7 @@ def _load_image(path):
 
 
 def _atmosphere_layout(observation):
-    """Create stable star slots and animated cloud slots."""
+    """Create stable star slots and slowly drifting cloud/star slots."""
     # Stars are decorative background points, not a new random field for each
     # observation. Keeping their identities fixed prevents visible shuffling
     # while their visibility changes with the stargazing score.
@@ -132,7 +134,7 @@ def _atmosphere_layout(observation):
     for index in range(120):
         brightness = star_rng.uniform(100, 255)
         stars.append((
-            star_rng.random(),
+            star_rng.random() + observation.time.timestamp() * STAR_DRIFT_SPEED,
             star_rng.random(),
             max(1, round(star_rng.uniform(1, 2.5))),
             brightness
@@ -201,6 +203,7 @@ def _draw_atmosphere(observation, sprite_path, size, layout=None):
     stars, clouds = layout
     for x, y, radius, alpha in stars:
         if alpha:
+            x %= 1
             star = pygame.Surface((radius * 2 + 1, radius * 2 + 1), pygame.SRCALPHA)
             pygame.draw.circle(star, (255, 244, 194, round(alpha)), (radius, radius), radius)
             atmosphere.blit(star, (round(x * width) - radius, round(y * height) - radius))
