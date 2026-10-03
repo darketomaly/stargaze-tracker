@@ -212,8 +212,8 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     ax.clear()
     image_artist = ax.imshow(images[initial_index], interpolation="nearest")
     ax.axis("off")
-    slider_ax = fig.add_axes((0.2, 0.04, 0.6, 0.04))
-    save_ax = fig.add_axes((0.83, 0.035, 0.1, 0.05))
+    slider_ax = fig.add_axes((0.15, 0.04, 0.56, 0.04))
+    save_ax = fig.add_axes((0.80, 0.035, 0.07, 0.05))
     slider = Slider(
         slider_ax,
         "Time",
