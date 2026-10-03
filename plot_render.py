@@ -3,6 +3,7 @@
 import math
 import os
 import random
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from plot_data import TIMEZONE, lerp_color
 
 CLOUD_DRIFT_PERIOD = 60 * 60
 CLOUD_DRIFT_SPEED = 1 / CLOUD_DRIFT_PERIOD
-SCENE_CROSSFADE_DURATION = 0.15
+OBSERVATION_ANIMATION_SPEED = 12
 
 
 def register_fonts(font_dir):
@@ -85,7 +86,40 @@ def _load_image(path):
     return pygame.image.load(BytesIO(data), hint).convert_alpha()
 
 
-def _draw_scene(observation, sprite_path, fonts, size, include_atmosphere=True):
+def _animate_observation(current, target, amount):
+    def animate_angle(current_angle, target_angle):
+        difference = (target_angle - current_angle + 180) % 360 - 180
+        return current_angle + difference * amount
+
+    time = current.time + (target.time - current.time) * amount
+    return replace(
+        target,
+        time=time,
+        readable_time=time.strftime("%I:%M %p").lstrip("0"),
+        cloud_coverage=current.cloud_coverage
+        + (target.cloud_coverage - current.cloud_coverage) * amount,
+        coverage_fraction=current.coverage_fraction
+        + (target.coverage_fraction - current.coverage_fraction) * amount,
+        visibility_meters=current.visibility_meters
+        + (target.visibility_meters - current.visibility_meters) * amount,
+        stargaze_score=current.stargaze_score
+        + (target.stargaze_score - current.stargaze_score) * amount,
+        moon_phase=current.moon_phase
+        + (target.moon_phase - current.moon_phase) * amount,
+        moon_illumination=current.moon_illumination
+        + (target.moon_illumination - current.moon_illumination) * amount,
+        moon_altitude=current.moon_altitude
+        + (target.moon_altitude - current.moon_altitude) * amount,
+        moon_azimuth=animate_angle(current.moon_azimuth, target.moon_azimuth),
+        sun_altitude=current.sun_altitude
+        + (target.sun_altitude - current.sun_altitude) * amount,
+        sun_azimuth=animate_angle(current.sun_azimuth, target.sun_azimuth),
+        daylight_brightness=current.daylight_brightness
+        + (target.daylight_brightness - current.daylight_brightness) * amount,
+    )
+
+
+def _draw_scene(observation, sprite_path, fonts, size):
     width, height = size
     background = lerp_color((.01, .02, .10), (.35, .70, .95),
                              observation.daylight_brightness)
@@ -103,8 +137,7 @@ def _draw_scene(observation, sprite_path, fonts, size, include_atmosphere=True):
         moon = moon_image(observation.moon_phase, round(scale * .9))
         scene.blit(moon, (moon_x - moon.get_width() // 2, moon_y - moon.get_height() // 2))
 
-    if include_atmosphere:
-        scene.blit(_draw_atmosphere(observation, sprite_path, size), (0, 0))
+    scene.blit(_draw_atmosphere(observation, sprite_path, size), (0, 0))
     _draw_scene_details(scene, observation, fonts, scale, width)
     return scene
 
@@ -113,7 +146,11 @@ def _draw_atmosphere(observation, sprite_path, size):
     width, height = size
     timestamp = observation.time.timestamp()
     atmosphere = pygame.Surface(size, pygame.SRCALPHA)
-    _draw_stars(atmosphere, observation.stargaze_score, random.Random(timestamp))
+    _draw_stars(
+        atmosphere,
+        observation.stargaze_score,
+        random.Random(observation.time.date().toordinal()),
+    )
     scale = width / 8
     cloud = _load_image(sprite_path)
     cloud_rng = random.Random(observation.time.date().toordinal())
@@ -191,9 +228,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     pygame.display.set_caption("Stargazing sky")
     clock = pygame.time.Clock()
     index = max(0, min(initial_index, len(observations) - 1))
-    displayed_atmosphere = None
-    transition_from = None
-    transition_started = 0
+    displayed_observation = observations[index]
     save_icon_path = Path(sprite_path).with_name("icon_save.png")
     try:
         icon = _load_image(save_icon_path)
@@ -202,12 +237,8 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     dragging_slider = False
 
     def set_index(new_index):
-        nonlocal index, transition_from, transition_started
+        nonlocal index
         new_index = max(0, min(new_index, len(observations) - 1))
-        if new_index != index and displayed_atmosphere is not None:
-            transition_from = displayed_atmosphere.copy()
-            transition_from.set_alpha(255)
-            transition_started = pygame.time.get_ticks()
         index = new_index
 
     def update_slider(position):
@@ -249,46 +280,29 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         scene_height = min(height - 90, round(width * 3 / 4))
         scene_width = round(scene_height * 4 / 3)
         scene_size = (scene_width, scene_height)
-        scene = _draw_scene(
+        elapsed = clock.tick(60) / 1000
+        animation_amount = 1 - math.exp(
+            -OBSERVATION_ANIMATION_SPEED * elapsed
+        )
+        displayed_observation = _animate_observation(
+            displayed_observation,
             observations[index],
-            sprite_path,
-            fonts,
-            scene_size,
-            include_atmosphere=False,
+            animation_amount,
         )
-        atmosphere = _draw_atmosphere(
-            observations[index], sprite_path, scene_size
-        )
+        scene = _draw_scene(displayed_observation, sprite_path, fonts, scene_size)
         window.fill("#111111")
         left = (width - scene_width) // 2
-        displayed_scene = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
-        if transition_from is not None:
-            progress = min(
-                1,
-                (pygame.time.get_ticks() - transition_started)
-                / (SCENE_CROSSFADE_DURATION * 1000),
-            )
-            transition_from.set_alpha(round((1 - progress) * 255))
-            atmosphere.set_alpha(round(progress * 255))
-            displayed_scene.blit(scene, (0, 0))
-            displayed_scene.blit(transition_from, (0, 0))
-            displayed_scene.blit(atmosphere, (0, 0))
-            if progress >= 1:
-                transition_from = None
-        else:
-            displayed_scene.blit(scene, (0, 0))
-            displayed_scene.blit(atmosphere, (0, 0))
-        window.blit(displayed_scene, (left, 0))
-        displayed_atmosphere = atmosphere.copy()
-        displayed_atmosphere.set_alpha(255)
+        window.blit(scene, (left, 0))
         pygame.draw.line(window, "#777777", (left, height - 50), (left + scene_width, height - 50), 4)
         knob = left + round(scene_width * index / max(1, len(observations) - 1))
         pygame.draw.circle(window, "#43d17a", (knob, height - 50), 9)
         font = _font(fonts, 18)
-        window.blit(font.render(observations[index].readable_time, True, "white"), (left, height - 85))
+        window.blit(
+            font.render(displayed_observation.readable_time, True, "white"),
+            (left, height - 85),
+        )
         if icon:
             button = pygame.transform.smoothscale(icon, (42, 42))
             window.blit(button, (width - 82, height - 70))
         pygame.display.flip()
-        clock.tick(30)
     pygame.quit()
