@@ -167,19 +167,16 @@ def render_image(observation, sprite_path, width, height):
     return image
 
 
-def preview_size(window):
-    screen_height = None
-    if window is not None and hasattr(window, "winfo_screenheight"):
-        screen_height = window.winfo_screenheight()
-    elif window is not None and hasattr(window, "screen"):
-        screen = window.screen()
-        if screen is not None:
-            screen_height = screen.availableGeometry().height()
-    elif window is not None and hasattr(window, "GetDisplaySize"):
-        screen_height = window.GetDisplaySize()[1]
-
-    height = min(640, round(screen_height * 0.75)) if screen_height else 640
-    return round(height * 1.25), height
+def maximize_window(window):
+    """Maximize the ordinary application window without entering fullscreen mode."""
+    if hasattr(window, "showMaximized"):
+        window.showMaximized()
+    elif hasattr(window, "Maximize"):
+        window.Maximize(True)
+    elif hasattr(window, "maximize"):
+        window.maximize()
+    elif hasattr(window, "state"):
+        window.state("zoomed")
 
 
 def render(observations, sprite_path, font_dir, output_path, initial_index=0):
@@ -189,14 +186,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
     window = getattr(fig.canvas.manager, "window", None)
     if window is not None:
-        width, height = preview_size(window)
-        fig.set_size_inches(width / 100, height / 100)
-        if hasattr(window, "resizable"):
-            window.resizable(False, False)
-        elif hasattr(window, "setFixedSize"):
-            window.setFixedSize(width, height)
-        if hasattr(window, "geometry"):
-            window.geometry(f"{width}x{height}")
+        maximize_window(window)
 
     ax.axis("off")
     loading_text = ax.text(
@@ -206,6 +196,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     plt.show(block=False)
     fig.canvas.draw()
     fig.canvas.flush_events()
+    width, height = fig.canvas.get_width_height()
 
     images = []
     for index, observation in enumerate(observations, start=1):
