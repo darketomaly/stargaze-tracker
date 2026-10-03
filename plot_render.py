@@ -19,6 +19,7 @@ STAR_DRIFT_PERIOD = 3 * 24 * 60 * 60
 STAR_DRIFT_SPEED = 1 / STAR_DRIFT_PERIOD
 STAR_CURVE = 0.035
 CLOUD_CURVE = 0.07
+UI_LEFT_PADDING = 0.15
 SCENE_ANIMATION_DURATION = 0.45
 STAR_SEED = 317
 
@@ -265,9 +266,10 @@ def _interpolate_layout(start, end, fraction):
 def _draw_scene_details(scene, observation, fonts, scale, width):
     regular = _font(fonts, width / 72)
     bold = _font(fonts, width / 72, True)
+    left_padding = round(UI_LEFT_PADDING * scale)
     panel = pygame.Surface((round(3.35 * scale), round(2.48 * scale)), pygame.SRCALPHA)
     panel.fill((0, 0, 0, 140))
-    scene.blit(panel, (-round(.05 * scale), round(.28 * scale)))
+    scene.blit(panel, (left_padding - round(.05 * scale), round(.28 * scale)))
     rows = (
         (f"Time ({TIMEZONE})", f"{observation.time.day} {observation.time:%b} @ {observation.readable_time}"),
         ("Cloud coverage", f"{observation.cloud_coverage:.0f}%"),
@@ -278,20 +280,20 @@ def _draw_scene_details(scene, observation, fonts, scale, width):
     )
     for row, (label, value) in enumerate(rows):
         y = round((.43 + row * .25) * scale)
-        scene.blit(regular.render(label + ":", True, "white"), (round(.05 * scale), y))
-        scene.blit(regular.render(value, True, "#bfbfbf"), (round(2.15 * scale), y))
-    scene.blit(regular.render("Not considered:", True, "white"), (round(.05 * scale), round(1.98 * scale)))
-    scene.blit(regular.render("Light pollution, target altitude", True, "#bfbfbf"), (round(.05 * scale), round(2.23 * scale)))
+        scene.blit(regular.render(label + ":", True, "white"), (left_padding + round(.05 * scale), y))
+        scene.blit(regular.render(value, True, "#bfbfbf"), (left_padding + round(2.15 * scale), y))
+    scene.blit(regular.render("Not considered:", True, "white"), (left_padding + round(.05 * scale), round(1.98 * scale)))
+    scene.blit(regular.render("Light pollution, target altitude", True, "#bfbfbf"), (left_padding + round(.05 * scale), round(2.23 * scale)))
 
     score = observation.stargaze_score
     score_panel = pygame.Surface((round(2.2 * scale), round(.68 * scale)), pygame.SRCALPHA)
     score_panel.fill((0, 0, 0, 165))
-    scene.blit(score_panel, (-round(.05 * scale), round(5.24 * scale)))
-    scene.blit(bold.render("Chance of good stargazing:", True, "white"), (round(.05 * scale), round(5.35 * scale)))
+    scene.blit(score_panel, (left_padding - round(.05 * scale), round(5.24 * scale)))
+    scene.blit(bold.render("Chance of good stargazing:", True, "white"), (left_padding + round(.05 * scale), round(5.35 * scale)))
     score_color = "#43d17a" if score >= 50 else "#ff5c5c"
-    scene.blit(bold.render(f"{score:.0f}%", True, score_color), (round(1.85 * scale), round(5.35 * scale)))
+    scene.blit(bold.render(f"{score:.0f}%", True, score_color), (left_padding + round(1.85 * scale), round(5.35 * scale)))
     if score < 50:
-        scene.blit(regular.render(score_explanation(observation), True, "#bfbfbf"), (round(.05 * scale), round(5.58 * scale)))
+        scene.blit(regular.render(score_explanation(observation), True, "#bfbfbf"), (left_padding + round(.05 * scale), round(5.58 * scale)))
     return scene
 
 
@@ -461,8 +463,6 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         )
         knob = slider_left + round(slider_width * slider_fraction)
         pygame.draw.circle(window, "#A6192E", (knob, height - 50), 9)
-        font = _font(fonts, 18)
-        window.blit(font.render(displayed_observation.readable_time, True, "white"), (0, height - 85))
         if icon:
             button = pygame.transform.smoothscale(icon, (42, 42))
             window.blit(button, (width - 82, height - 70))
