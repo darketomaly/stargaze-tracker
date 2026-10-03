@@ -474,18 +474,12 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
             sprite_path,
             fonts,
             scene_size,
-            ui_size=ui_size,
-        )
-        atmosphere = _draw_atmosphere(
-            displayed_observation,
-            sprite_path,
-            scene_size,
             displayed_layout,
+            ui_size=ui_size,
         )
         window.fill("#111111")
         displayed_scene = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
         displayed_scene.blit(scene, (0, 0))
-        displayed_scene.blit(atmosphere, (0, 0))
         window.blit(displayed_scene, (0, 0))
         pygame.draw.line(
             window,
