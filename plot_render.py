@@ -24,6 +24,9 @@ CLOUD_CURVE = 0.07
 UI_LEFT_PADDING = 0.15
 SAVE_BUTTON_SIZE = 32
 SAVE_BUTTON_GAP = 12
+SAVE_BUTTON_HOVER_SCALE = 1.12
+SAVE_BUTTON_PUNCH_DURATION = 0.28
+SAVE_FEEDBACK_DURATION = 1.2
 SCENE_ANIMATION_DURATION = 0.45
 STAR_SEED = 317
 
@@ -347,6 +350,8 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         icon = None
     dragging_slider = False
     slider_fraction = index / max(1, len(observations) - 1)
+    save_punch_started = None
+    saved_feedback_started = None
 
     def set_index(new_index):
         nonlocal index, animation_from, animation_layout_from
@@ -390,6 +395,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
             slider_fraction = fraction
     running = True
     while running:
+        now = pygame.time.get_ticks()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -420,6 +426,8 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                         (1600, 1200),
                     )
                     pygame.image.save(image, str(output_path))
+                    save_punch_started = now
+                    saved_feedback_started = now
                     print(f"saved {output_path}")
                 elif (
                     slider_left <= event.pos[0] <= slider_left + scene_width
@@ -489,16 +497,57 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         knob = slider_left + round(slider_width * slider_fraction)
         pygame.draw.circle(window, "#A6192E", (knob, height - 50), 9)
         if icon:
-            button = pygame.transform.smoothscale(
-                icon, (SAVE_BUTTON_SIZE, SAVE_BUTTON_SIZE)
+            button_x = slider_left + slider_width + SAVE_BUTTON_GAP
+            button_y = height - 50
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            save_rect = pygame.Rect(
+                button_x,
+                button_y - SAVE_BUTTON_SIZE // 2,
+                SAVE_BUTTON_SIZE,
+                SAVE_BUTTON_SIZE,
             )
+            scale = (
+                SAVE_BUTTON_HOVER_SCALE
+                if save_rect.collidepoint(mouse_x, mouse_y)
+                else 1
+            )
+            if save_punch_started is not None:
+                punch_progress = min(
+                    1,
+                    (now - save_punch_started)
+                    / (SAVE_BUTTON_PUNCH_DURATION * 1000),
+                )
+                scale += .16 * math.sin(math.pi * punch_progress)
+                if punch_progress >= 1:
+                    save_punch_started = None
+            button_size = round(SAVE_BUTTON_SIZE * scale)
+            button = pygame.transform.smoothscale(icon, (button_size, button_size))
             window.blit(
                 button,
                 (
-                    slider_left + slider_width + SAVE_BUTTON_GAP,
-                    height - 50 - SAVE_BUTTON_SIZE // 2,
+                    button_x - (button_size - SAVE_BUTTON_SIZE) // 2,
+                    button_y - button_size // 2,
                 ),
             )
+            if saved_feedback_started is not None:
+                feedback_progress = min(
+                    1,
+                    (now - saved_feedback_started)
+                    / (SAVE_FEEDBACK_DURATION * 1000),
+                )
+                feedback_alpha = round(255 * (1 - feedback_progress))
+                feedback_font = _font(fonts, 18, bold=True)
+                feedback = feedback_font.render("Saved!", True, (166, 25, 46))
+                feedback.set_alpha(feedback_alpha)
+                window.blit(
+                    feedback,
+                    (
+                        button_x + SAVE_BUTTON_SIZE + SAVE_BUTTON_GAP,
+                        button_y - feedback.get_height() // 2,
+                    ),
+                )
+                if feedback_progress >= 1:
+                    saved_feedback_started = None
         pygame.display.flip()
         clock.tick(30)
     pygame.quit()
