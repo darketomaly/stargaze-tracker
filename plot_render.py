@@ -304,11 +304,13 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     except pygame.error:
         icon = None
     dragging_slider = False
+    slider_fraction = index / max(1, len(observations) - 1)
 
     def set_index(new_index):
         nonlocal index, animation_from, animation_layout_from
-        nonlocal animation_layout_to, animation_started
+        nonlocal animation_layout_to, animation_started, slider_fraction
         new_index = max(0, min(new_index, len(observations) - 1))
+        slider_fraction = new_index / max(1, len(observations) - 1)
         if new_index == index:
             return
         now = pygame.time.get_ticks()
@@ -335,6 +337,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         index = new_index
 
     def update_slider(position):
+        nonlocal slider_fraction
         width, height = window.get_size()
         scene_height = min(height - 90, round(width * 3 / 4))
         scene_width = round(scene_height * 4 / 3)
@@ -342,7 +345,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         if scene_width:
             fraction = max(0, min(1, (position[0] - left) / scene_width))
             set_index(round(fraction * (len(observations) - 1)))
-
+            slider_fraction = fraction
     running = True
     while running:
         for event in pygame.event.get():
@@ -379,6 +382,8 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         scene_height = min(height - 90, round(width * 3 / 4))
         scene_width = round(scene_height * 4 / 3)
         scene_size = (scene_width, scene_height)
+        if dragging_slider:
+            update_slider(pygame.mouse.get_pos())
         now = pygame.time.get_ticks()
         if animation_from is not None:
             progress = min(
@@ -419,7 +424,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         displayed_scene.blit(atmosphere, (0, 0))
         window.blit(displayed_scene, (left, 0))
         pygame.draw.line(window, "#777777", (left, height - 50), (left + scene_width, height - 50), 4)
-        knob = left + round(scene_width * index / max(1, len(observations) - 1))
+        knob = left + round(scene_width * slider_fraction)
         pygame.draw.circle(window, "#43d17a", (knob, height - 50), 9)
         font = _font(fonts, 18)
         window.blit(font.render(observations[index].readable_time, True, "white"), (left, height - 85))
