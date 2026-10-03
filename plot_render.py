@@ -367,7 +367,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         width, height = window.get_size()
         scene_height = min(height - 90, round(width * 3 / 4))
         scene_width = round(scene_height * 4 / 3)
-        left = 0
+        left = (width - scene_width) // 2
         if scene_width:
             fraction = max(0, min(1, (position[0] - left) / scene_width))
             set_index(round(fraction * (len(observations) - 1)))
@@ -385,7 +385,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                 width, height = window.get_size()
                 scene_height = min(height - 90, round(width * 3 / 4))
                 scene_width = round(scene_height * 4 / 3)
-                left = 0
+                left = (width - scene_width) // 2
                 if height - 75 <= event.pos[1] <= height - 25 and scene_width:
                     dragging_slider = True
                     update_slider(event.pos)
@@ -408,6 +408,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         width, height = window.get_size()
         slider_height = min(height - 90, round(width * 3 / 4))
         slider_width = round(slider_height * 4 / 3)
+        slider_left = (width - slider_width) // 2
         scene_size = (width, height)
         ui_size = (slider_width, slider_height)
         if dragging_slider:
@@ -451,9 +452,15 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         displayed_scene.blit(scene, (0, 0))
         displayed_scene.blit(atmosphere, (0, 0))
         window.blit(displayed_scene, (0, 0))
-        pygame.draw.line(window, "#777777", (0, height - 50), (slider_width, height - 50), 4)
-        knob = round(slider_width * slider_fraction)
-        pygame.draw.circle(window, "#43d17a", (knob, height - 50), 9)
+        pygame.draw.line(
+            window,
+            "#777777",
+            (slider_left, height - 50),
+            (slider_left + slider_width, height - 50),
+            4,
+        )
+        knob = slider_left + round(slider_width * slider_fraction)
+        pygame.draw.circle(window, "#A6192E", (knob, height - 50), 9)
         font = _font(fonts, 18)
         window.blit(font.render(displayed_observation.readable_time, True, "white"), (0, height - 85))
         if icon:
