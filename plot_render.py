@@ -82,8 +82,9 @@ def draw_information_panel(ax, observation):
     ax.add_patch(Rectangle((-0.05, 3.72), 3.35, 2.48,
                            facecolor="black", alpha=0.55, edgecolor="none",
                            zorder=3))
+    date_time = f"{observation.time.day} {observation.time:%b} @ {observation.readable_time}"
     info_rows = (
-        (f"Time ({TIMEZONE})", observation.readable_time),
+        (f"Time ({TIMEZONE})", date_time),
         ("Cloud coverage", f"{observation.cloud_coverage:.0f}%"),
         ("Visibility", observation.visibility),
         ("Moon illumination", f"{observation.moon_illumination:.0f}%"),
@@ -116,13 +117,15 @@ def draw_score_panel(ax, score):
 
 
 def render_image(observation, sprite_path, width, height):
+    scene_width = min(width, round(height * 4 / 3))
+    scene_height = round(scene_width * 3 / 4)
     background = lerp_color(
         (0.01, 0.02, 0.10),
         (0.35, 0.70, 0.95),
         observation.daylight_brightness,
     )
     fig, ax = plt.subplots(
-        figsize=(width / 100, height / 100),
+        figsize=(scene_width / 100, scene_height / 100),
         dpi=100,
         facecolor=background,
     )
@@ -160,6 +163,7 @@ def render_image(observation, sprite_path, width, height):
 
     ax.set_xlim(0, 8)
     ax.set_ylim(0, 6)
+    ax.set_aspect("equal")
     ax.axis("off")
     fig.canvas.draw()
     image = np.asarray(fig.canvas.buffer_rgba()).copy()
@@ -243,7 +247,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     def save(_event):
         output_path.parent.mkdir(exist_ok=True)
         selected = observations[round(slider.val)]
-        image = render_image(selected, sprite_path, 1500, 1200)
+        image = render_image(selected, sprite_path, 1600, 1200)
         plt.imsave(output_path, image)
         print(f"saved {output_path}")
 
