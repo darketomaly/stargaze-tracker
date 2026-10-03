@@ -1,10 +1,12 @@
 """Render a prepared observation as a stargazing picture with Pygame."""
 
 import math
+import os
 import random
-import sys
 from io import BytesIO
 from pathlib import Path
+
+os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitor")
 
 import pygame
 
@@ -154,22 +156,17 @@ def score_explanation(observation):
     return "Limited conditions"
 
 
-def _maximize_window():
-    if sys.platform == "win32":
-        import ctypes
-        hwnd = pygame.display.get_wm_info().get("window")
-        if hwnd:
-            ctypes.windll.user32.ShowWindow(hwnd, 3)
-
-
 def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     """Show the interactive viewer and save the selected scene on request."""
     pygame.init()
     pygame.font.init()
     fonts = register_fonts(font_dir)
-    window = pygame.display.set_mode((800, 640), pygame.RESIZABLE)
+    desktop_width, desktop_height = pygame.display.get_desktop_sizes()[0]
+    window = pygame.display.set_mode(
+        (min(1280, desktop_width), min(960, desktop_height)),
+        pygame.RESIZABLE,
+    )
     pygame.display.set_caption("Stargazing sky")
-    _maximize_window()
     clock = pygame.time.Clock()
     index = max(0, min(initial_index, len(observations) - 1))
     save_icon_path = Path(sprite_path).with_name("icon_save.png")
