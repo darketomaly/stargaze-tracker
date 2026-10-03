@@ -22,6 +22,8 @@ STAR_DRIFT_SPEED = 1 / STAR_DRIFT_PERIOD
 STAR_CURVE = 0.035
 CLOUD_CURVE = 0.07
 UI_LEFT_PADDING = 0.15
+SAVE_BUTTON_SIZE = 32
+SAVE_BUTTON_GAP = 12
 SCENE_ANIMATION_DURATION = 0.45
 STAR_SEED = 317
 
@@ -400,10 +402,14 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                 scene_height = min(height - 90, round(width * 3 / 4))
                 scene_width = round(scene_height * 4 / 3)
                 left = (width - scene_width) // 2
-                if height - 75 <= event.pos[1] <= height - 25 and scene_width:
-                    dragging_slider = True
-                    update_slider(event.pos)
-                elif width - 110 <= event.pos[0] <= width - 25 and height - 75 <= event.pos[1] <= height - 15:
+                slider_left = (width - scene_width) // 2
+                save_rect = pygame.Rect(
+                    slider_left + scene_width + SAVE_BUTTON_GAP,
+                    height - 50 - SAVE_BUTTON_SIZE // 2,
+                    SAVE_BUTTON_SIZE,
+                    SAVE_BUTTON_SIZE,
+                )
+                if save_rect.collidepoint(event.pos) and icon:
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     image = _draw_scene(
                         observations[index],
@@ -415,6 +421,13 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                     )
                     pygame.image.save(image, str(output_path))
                     print(f"saved {output_path}")
+                elif (
+                    slider_left <= event.pos[0] <= slider_left + scene_width
+                    and height - 75 <= event.pos[1] <= height - 25
+                    and scene_width
+                ):
+                    dragging_slider = True
+                    update_slider(event.pos)
             elif event.type == pygame.MOUSEMOTION and dragging_slider:
                 update_slider(event.pos)
             elif event.type == pygame.MOUSEBUTTONUP:
@@ -476,8 +489,16 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         knob = slider_left + round(slider_width * slider_fraction)
         pygame.draw.circle(window, "#A6192E", (knob, height - 50), 9)
         if icon:
-            button = pygame.transform.smoothscale(icon, (42, 42))
-            window.blit(button, (width - 82, height - 70))
+            button = pygame.transform.smoothscale(
+                icon, (SAVE_BUTTON_SIZE, SAVE_BUTTON_SIZE)
+            )
+            window.blit(
+                button,
+                (
+                    slider_left + slider_width + SAVE_BUTTON_GAP,
+                    height - 50 - SAVE_BUTTON_SIZE // 2,
+                ),
+            )
         pygame.display.flip()
         clock.tick(30)
     pygame.quit()
