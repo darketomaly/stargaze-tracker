@@ -17,6 +17,8 @@ CLOUD_DRIFT_PERIOD = 60 * 60
 CLOUD_DRIFT_SPEED = 1 / CLOUD_DRIFT_PERIOD
 STAR_DRIFT_PERIOD = 3 * 24 * 60 * 60
 STAR_DRIFT_SPEED = 1 / STAR_DRIFT_PERIOD
+STAR_CURVE = 0.035
+CLOUD_CURVE = 0.07
 SCENE_ANIMATION_DURATION = 0.45
 STAR_SEED = 317
 
@@ -94,6 +96,12 @@ def _interpolate_wrapped(start, end, fraction, period):
     return start + difference * fraction
 
 
+def _dome_offset(x, strength):
+    """Return the inverted-U elevation for a wrapped screen position."""
+    wrapped_x = x % 1
+    return strength * 4 * wrapped_x * (1 - wrapped_x)
+
+
 def _interpolate_observation(start, end, fraction):
     """Interpolate the visual values that change when the selected time changes."""
     fraction = max(0, min(1, fraction))
@@ -133,9 +141,11 @@ def _atmosphere_layout(observation):
     stars = []
     for index in range(120):
         brightness = star_rng.uniform(100, 255)
+        x = star_rng.random() + observation.time.timestamp() * STAR_DRIFT_SPEED
+        y = star_rng.random()
         stars.append((
-            star_rng.random() + observation.time.timestamp() * STAR_DRIFT_SPEED,
-            star_rng.random(),
+            x,
+            y,
             max(1, round(star_rng.uniform(1, 2.5))),
             brightness
             if index < round(120 * max(0, min(observation.stargaze_score, 100)) / 100)
@@ -147,10 +157,12 @@ def _atmosphere_layout(observation):
     cloud_rng.shuffle(positions)
     clouds = []
     for index, (x, y) in enumerate(positions):
+        x = (x + cloud_rng.uniform(-.15, .15)) / 8
+        x += observation.time.timestamp() * CLOUD_DRIFT_SPEED / 8
+        y = (y + 1 + cloud_rng.uniform(-.15, .15)) / 6
         clouds.append((
-            (x + cloud_rng.uniform(-.15, .15)) / 8
-            + observation.time.timestamp() * CLOUD_DRIFT_SPEED / 8,
-            (y + 1 + cloud_rng.uniform(-.15, .15)) / 6,
+            x,
+            y,
             cloud_rng.uniform(.55, 1) * 255
             if index < round(len(positions) * observation.coverage_fraction)
             else 0,
@@ -204,6 +216,7 @@ def _draw_atmosphere(observation, sprite_path, size, layout=None):
     for x, y, radius, alpha in stars:
         if alpha:
             x %= 1
+            y -= _dome_offset(x, STAR_CURVE)
             star = pygame.Surface((radius * 2 + 1, radius * 2 + 1), pygame.SRCALPHA)
             pygame.draw.circle(star, (255, 244, 194, round(alpha)), (radius, radius), radius)
             atmosphere.blit(star, (round(x * width) - radius, round(y * height) - radius))
@@ -214,6 +227,7 @@ def _draw_atmosphere(observation, sprite_path, size, layout=None):
         if not alpha:
             continue
         x %= 1
+        y += _dome_offset(x, CLOUD_CURVE)
         y = 1 - y
         cloud_size = round(scale)
         sprite = pygame.transform.smoothscale(cloud, (cloud_size, cloud_size))
