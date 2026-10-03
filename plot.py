@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["matplotlib", "numpy", "astral"]
+# dependencies = ["pygame-ce", "astral"]
 # ///
 
 """Prepare the data and render one stargazing picture."""

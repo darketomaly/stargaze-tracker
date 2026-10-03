@@ -1,107 +1,145 @@
-"""Render a prepared observation as a stargazing picture."""
+"""Render a prepared observation as a stargazing picture with Pygame."""
 
 import math
 import random
+import sys
 from io import BytesIO
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
-from matplotlib.image import imread
-from matplotlib.patches import Circle, Rectangle
-from matplotlib.transforms import Affine2D
-from matplotlib.widgets import Button, Slider
-import numpy as np
+import pygame
 
-from plot_data import Observation, TIMEZONE, lerp_color
+from plot_data import TIMEZONE, lerp_color
 
 
 def register_fonts(font_dir):
-    """Register the bundled Google Fonts family before drawing any text."""
-    for font_name in ("Rajdhani-Regular.ttf", "Rajdhani-Bold.ttf"):
-        font_manager.fontManager.addfont(font_dir / font_name)
-    plt.rcParams["font.family"] = "Rajdhani"
+    """Return the bundled Rajdhani font paths (Pygame loads fonts explicitly)."""
+    return {
+        "regular": str(Path(font_dir) / "Rajdhani-Regular.ttf"),
+        "bold": str(Path(font_dir) / "Rajdhani-Bold.ttf"),
+    }
 
 
-def moon_image(phase):
-    coordinates = np.linspace(-1, 1, 100)
-    x, y = np.meshgrid(coordinates, coordinates)
-    disk = x**2 + y**2 <= 1
-    z = np.sqrt(np.maximum(0, 1 - x**2 - y**2))
+def _font(fonts, size, bold=False):
+    path = fonts["bold" if bold else "regular"]
+    try:
+        return pygame.font.Font(path, max(1, round(size)))
+    except (FileNotFoundError, pygame.error):
+        return pygame.font.SysFont("sans", max(1, round(size)), bold=bold)
+
+
+def _color(rgb):
+    return tuple(max(0, min(255, round(channel * 255))) for channel in rgb)
+
+
+def moon_image(phase, size):
+    """Create a transparent moon surface, including its phase shadow."""
+    surface = pygame.Surface((size, size), pygame.SRCALPHA)
+    radius = size / 2 - 1
     angle = 2 * math.pi * phase
-    illuminated = x * math.sin(angle) + z * math.cos(angle) > 0
-    image = np.zeros((100, 100, 4))
-    image[..., :3] = (0.85, 0.85, 0.85)
-    image[..., 3] = disk & illuminated
-    return image
+    for py in range(size):
+        for px in range(size):
+            x = (px - size / 2) / radius
+            y = (py - size / 2) / radius
+            if x * x + y * y <= 1:
+                z = math.sqrt(max(0, 1 - x * x - y * y))
+                if x * math.sin(angle) + z * math.cos(angle) > 0:
+                    surface.set_at((px, py), (217, 217, 217, 255))
+    pygame.draw.circle(surface, (0, 0, 0, 220), (size // 2, size // 2), round(radius), 2)
+    return surface
 
 
-def draw_stars(ax, score):
+def _draw_gradient(surface, color):
+    width, height = surface.get_size()
+    base = tuple(color)
     variation = random.Random()
-    star_count = round(120 * max(0, min(score, 100)) / 100)
-    if star_count == 0:
-        return
-    stars_x = [variation.uniform(0, 8) for _ in range(star_count)]
-    stars_y = [variation.uniform(0, 6) for _ in range(star_count)]
-    star_sizes = [variation.uniform(3, 14) for _ in range(star_count)]
-    star_alphas = [variation.uniform(0.4, 1) for _ in range(star_count)]
-    ax.scatter(stars_x, stars_y, s=star_sizes, c="#fff4c2",
-               alpha=star_alphas, linewidths=0)
+    bottom = _color(tuple(max(0, min(1, value * variation.uniform(.82, .94))) for value in base))
+    top = _color(tuple(max(0, min(1, value * variation.uniform(1.04, 1.18))) for value in base))
+    for y in range(height):
+        fraction = y / max(1, height - 1)
+        current = tuple(round(bottom[i] + (top[i] - bottom[i]) * fraction) for i in range(3))
+        pygame.draw.line(surface, current, (0, height - y - 1), (width, height - y - 1))
 
 
-def draw_sky(ax, color):
-    variation = random.Random()
-    base = np.array(color)
-    bottom = np.clip(base * variation.uniform(0.82, 0.94), 0, 1)
-    top = np.clip(base * variation.uniform(1.04, 1.18), 0, 1)
-    gradient = np.linspace(bottom, top, 256)[:, np.newaxis, :]
-    ax.imshow(gradient, extent=(0, 8, 0, 6), aspect="auto",
-              interpolation="bicubic", zorder=0)
+def _draw_stars(surface, score, rng):
+    width, height = surface.get_size()
+    for _ in range(round(120 * max(0, min(score, 100)) / 100)):
+        x, y = rng.randrange(width), rng.randrange(height)
+        radius = max(1, round(rng.uniform(1, 2.5)))
+        color = (255, 244, 194, round(rng.uniform(100, 255)))
+        star = pygame.Surface((radius * 2 + 1, radius * 2 + 1), pygame.SRCALPHA)
+        pygame.draw.circle(star, color, (radius, radius), radius)
+        surface.blit(star, (x - radius, y - radius))
 
 
-def draw_clouds(ax, coverage_fraction, sprite_path):
-    cloud = imread(sprite_path)
-    variation = random.Random()
+def _load_image(path):
+    data = Path(path).read_bytes()
+    # The save icon is named .png for historical reasons, but its bytes are WebP.
+    hint = "image.webp" if data[:4] == b"RIFF" and b"WEBP" in data[:16] else str(path)
+    return pygame.image.load(BytesIO(data), hint).convert_alpha()
+
+
+def _draw_scene(observation, sprite_path, fonts, size):
+    width, height = size
+    background = lerp_color((.01, .02, .10), (.35, .70, .95),
+                             observation.daylight_brightness)
+    scene = pygame.Surface(size)
+    _draw_gradient(scene, background)
+    rng = random.Random(observation.time.timestamp())
+    _draw_stars(scene, observation.stargaze_score, rng)
+    scale = width / 8
+    sun_x = round(observation.sun_azimuth / 360 * width)
+    sun_y = round(height - max(0, min(6, observation.sun_altitude / 90 * 6)) * scale)
+    moon_x = round(observation.moon_azimuth / 360 * width)
+    moon_y = round(height - max(0, min(6, observation.moon_altitude / 90 * 6)) * scale)
+    if observation.sun_altitude > 0:
+        pygame.draw.circle(scene, "#ffd34e", (sun_x, sun_y), round(scale * .45))
+        pygame.draw.circle(scene, "#000000", (sun_x, sun_y), round(scale * .45), 2)
+    if observation.moon_altitude > 0:
+        moon = moon_image(observation.moon_phase, round(scale * .9))
+        scene.blit(moon, (moon_x - moon.get_width() // 2, moon_y - moon.get_height() // 2))
+
+    cloud = _load_image(sprite_path)
     positions = [(x, y) for x in range(8) for y in range(6)]
-    variation.shuffle(positions)
-    cloud_count = round(len(positions) * coverage_fraction)
-    for x, y in positions[:cloud_count]:
-        jitter_x = variation.uniform(-0.15, 0.15)
-        jitter_y = variation.uniform(-0.15, 0.15)
-        left, bottom = x + jitter_x, y + jitter_y
-        center_x, center_y = left + 0.5, bottom + 0.5
-        rotation = variation.uniform(-12, 12)
-        transform = (Affine2D()
-                     .rotate_deg_around(center_x, center_y, rotation)
-                     + ax.transData)
-        ax.imshow(cloud, extent=(left, left + 1, bottom, bottom + 1),
-                  transform=transform,
-                  alpha=variation.uniform(0.55, 1.0), zorder=2)
+    rng.shuffle(positions)
+    for x, y in positions[:round(len(positions) * observation.coverage_fraction)]:
+        cloud_size = round(scale)
+        sprite = pygame.transform.smoothscale(cloud, (cloud_size, cloud_size))
+        sprite.set_alpha(round(rng.uniform(.55, 1) * 255))
+        sprite = pygame.transform.rotate(sprite, rng.uniform(-12, 12))
+        left = round((x + rng.uniform(-.15, .15)) * scale)
+        top = round(height - (y + 1 + rng.uniform(-.15, .15)) * scale)
+        scene.blit(sprite, (left, top))
 
-
-def draw_information_panel(ax, observation):
-    ax.add_patch(Rectangle((-0.05, 3.72), 3.35, 2.48,
-                           facecolor="black", alpha=0.55, edgecolor="none",
-                           zorder=3))
-    date_time = f"{observation.time.day} {observation.time:%b} @ {observation.readable_time}"
-    info_rows = (
-        (f"Time ({TIMEZONE})", date_time),
+    regular = _font(fonts, width / 72)
+    bold = _font(fonts, width / 72, True)
+    panel = pygame.Surface((round(3.35 * scale), round(2.48 * scale)), pygame.SRCALPHA)
+    panel.fill((0, 0, 0, 140))
+    scene.blit(panel, (-round(.05 * scale), round(.28 * scale)))
+    rows = (
+        (f"Time ({TIMEZONE})", f"{observation.time.day} {observation.time:%b} @ {observation.readable_time}"),
         ("Cloud coverage", f"{observation.cloud_coverage:.0f}%"),
         ("Visibility", observation.visibility),
         ("Moon illumination", f"{observation.moon_illumination:.0f}%"),
         ("Moon altitude", f"{observation.moon_altitude:.1f}°"),
         ("Moon phase", observation.moon_name),
     )
-    for row, (label, value) in enumerate(info_rows):
-        y = 5.95 - row * 0.25
-        ax.text(0.05, y, f"{label}:", ha="left", va="top",
-                fontsize=11, color="#ffffff", zorder=4)
-        ax.text(2.15, y, value, ha="left", va="top",
-                fontsize=11, color="#bfbfbf", zorder=4)
-    ax.text(0.05, 4.15, "Not considered:",
-            ha="left", va="top", fontsize=11, color="#ffffff", zorder=4)
-    ax.text(0.05, 3.9, "Light pollution, target altitude",
-            ha="left", va="top", fontsize=11, color="#bfbfbf", zorder=4)
+    for row, (label, value) in enumerate(rows):
+        y = round((.43 + row * .25) * scale)
+        scene.blit(regular.render(label + ":", True, "white"), (round(.05 * scale), y))
+        scene.blit(regular.render(value, True, "#bfbfbf"), (round(2.15 * scale), y))
+    scene.blit(regular.render("Not considered:", True, "white"), (round(.05 * scale), round(1.98 * scale)))
+    scene.blit(regular.render("Light pollution, target altitude", True, "#bfbfbf"), (round(.05 * scale), round(2.23 * scale)))
+
+    score = observation.stargaze_score
+    score_panel = pygame.Surface((round(2.2 * scale), round(.68 * scale)), pygame.SRCALPHA)
+    score_panel.fill((0, 0, 0, 165))
+    scene.blit(score_panel, (-round(.05 * scale), round(5.24 * scale)))
+    scene.blit(bold.render("Chance of good stargazing:", True, "white"), (round(.05 * scale), round(5.35 * scale)))
+    score_color = "#43d17a" if score >= 50 else "#ff5c5c"
+    scene.blit(bold.render(f"{score:.0f}%", True, score_color), (round(1.85 * scale), round(5.35 * scale)))
+    if score < 50:
+        scene.blit(regular.render(score_explanation(observation), True, "#bfbfbf"), (round(.05 * scale), round(5.58 * scale)))
+    return scene
 
 
 def score_explanation(observation):
@@ -116,188 +154,82 @@ def score_explanation(observation):
     return "Limited conditions"
 
 
-def draw_score_panel(ax, observation):
-    score = observation.stargaze_score
-    score_color = "#43d17a" if score >= 50 else "#ff5c5c"
-    ax.add_patch(Rectangle((-0.05, 0.08), 2.2, 0.68,
-                           facecolor="black", alpha=0.65, edgecolor="none",
-                           zorder=3))
-    ax.text(0.05, 0.35, "Chance of good stargazing:",
-            ha="left", va="bottom", fontsize=11, fontweight="bold",
-            color="#ffffff", zorder=4)
-    ax.text(1.85, 0.35, f"{score:.0f}%",
-            ha="left", va="bottom", fontsize=11, fontweight="bold",
-            color=score_color, zorder=4)
-    if score < 50:
-        ax.text(0.05, 0.16, score_explanation(observation),
-                ha="left", va="bottom", fontsize=9, color="#bfbfbf", zorder=4)
-
-
-def render_image(observation, sprite_path, width, height):
-    scene_width = min(width, round(height * 4 / 3))
-    scene_height = round(scene_width * 3 / 4)
-    background = lerp_color(
-        (0.01, 0.02, 0.10),
-        (0.35, 0.70, 0.95),
-        observation.daylight_brightness,
-    )
-    fig, ax = plt.subplots(
-        figsize=(scene_width / 100, scene_height / 100),
-        dpi=100,
-        facecolor=background,
-    )
-    fig.subplots_adjust(0, 0, 1, 1)
-    draw_sky(ax, background)
-
-    draw_stars(ax, observation.stargaze_score)
-    sun_x = observation.sun_azimuth / 360 * 8
-    sun_y = max(0, min(6, observation.sun_altitude / 90 * 6))
-    moon_x = observation.moon_azimuth / 360 * 8
-    moon_y = max(0, min(6, observation.moon_altitude / 90 * 6))
-    if observation.sun_altitude > 0:
-        ax.add_patch(Circle(
-            (sun_x, sun_y), 0.45, facecolor="#ffd34e",
-            edgecolor="#000000", linewidth=1.5, zorder=1,
-        ))
-    if observation.moon_altitude > 0:
-        image = moon_image(observation.moon_phase)
-        ax.imshow(image,
-                  extent=(moon_x - 0.45, moon_x + 0.45,
-                          moon_y - 0.45, moon_y + 0.45), zorder=1)
-        coordinates = np.linspace(-0.45, 0.45, image.shape[0])
-        ax.contour(
-            moon_x + coordinates,
-            moon_y + coordinates,
-            image[..., 3],
-            levels=[0.5],
-            colors="#000000",
-            linewidths=1.5,
-            zorder=1,
-        )
-    draw_clouds(ax, observation.coverage_fraction, sprite_path)
-    draw_information_panel(ax, observation)
-    draw_score_panel(ax, observation)
-
-    ax.set_xlim(0, 8)
-    ax.set_ylim(0, 6)
-    ax.set_aspect("equal")
-    ax.axis("off")
-    fig.canvas.draw()
-    image = np.asarray(fig.canvas.buffer_rgba()).copy()
-    plt.close(fig)
-    return image
-
-
-def maximize_window(window):
-    """Maximize the ordinary application window without entering fullscreen mode."""
-    if hasattr(window, "showMaximized"):
-        window.showMaximized()
-    elif hasattr(window, "Maximize"):
-        window.Maximize(True)
-    elif hasattr(window, "maximize"):
-        window.maximize()
-    elif hasattr(window, "state"):
-        window.state("zoomed")
+def _maximize_window():
+    if sys.platform == "win32":
+        import ctypes
+        hwnd = pygame.display.get_wm_info().get("window")
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 3)
 
 
 def render(observations, sprite_path, font_dir, output_path, initial_index=0):
-    register_fonts(font_dir)
-    plt.rcParams["toolbar"] = "None"
-    window = None
-    width, height = 800, 640
-    fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
-    window = getattr(fig.canvas.manager, "window", None)
+    """Show the interactive viewer and save the selected scene on request."""
+    pygame.init()
+    pygame.font.init()
+    fonts = register_fonts(font_dir)
+    window = pygame.display.set_mode((800, 640), pygame.RESIZABLE)
+    pygame.display.set_caption("Stargazing sky")
+    _maximize_window()
+    clock = pygame.time.Clock()
+    index = max(0, min(initial_index, len(observations) - 1))
+    save_icon_path = Path(sprite_path).with_name("icon_save.png")
+    try:
+        icon = _load_image(save_icon_path)
+    except pygame.error:
+        icon = None
+    dragging_slider = False
 
-    ax.axis("off")
-    loading_text = ax.text(
-        0.5, 0.5, "Preparing sky images...", ha="center", va="center",
-        fontsize=14,
-    )
-    plt.show(block=False)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
-    if window is not None:
-        maximize_window(window)
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-    width, height = fig.canvas.get_width_height()
+    def update_slider(position):
+        nonlocal index
+        width, height = window.get_size()
+        scene_height = min(height - 90, round(width * 3 / 4))
+        scene_width = round(scene_height * 4 / 3)
+        left = (width - scene_width) // 2
+        if scene_width:
+            fraction = max(0, min(1, (position[0] - left) / scene_width))
+            index = round(fraction * (len(observations) - 1))
 
-    images = []
-    for index, observation in enumerate(observations, start=1):
-        images.append(render_image(observation, sprite_path, width, height))
-        loading_text.set_text(
-            f"Preparing sky images... {index}/{len(observations)}"
-        )
-        fig.canvas.draw_idle()
-        fig.canvas.flush_events()
-
-    initial_index = max(0, min(initial_index, len(images) - 1))
-    fig.subplots_adjust(bottom=0.15)
-    ax.clear()
-    image_artist = ax.imshow(images[initial_index], interpolation="nearest")
-    ax.axis("off")
-    slider_ax = fig.add_axes((0.15, 0.04, 0.56, 0.04))
-    save_ax = fig.add_axes((0.80, 0.035, 0.07, 0.05))
-    save_icon_path = sprite_path.with_name("icon_save.png")
-    save_icon = imread(
-        BytesIO(save_icon_path.read_bytes()),
-        format="webp",
-    )
-    icon_size = round(save_icon.shape[0] * 0.7)
-    icon_indices = np.linspace(
-        0, save_icon.shape[0] - 1, icon_size,
-    ).astype(int)
-    resized_icon = save_icon[np.ix_(icon_indices, icon_indices)]
-    icon_padding = (save_icon.shape[0] - icon_size) // 2
-    save_icon = np.zeros_like(save_icon)
-    save_icon[
-        icon_padding:icon_padding + icon_size,
-        icon_padding:icon_padding + icon_size,
-    ] = resized_icon
-    slider = Slider(
-        slider_ax,
-        "Time",
-        0,
-        len(images) - 1,
-        valinit=initial_index,
-        valstep=1,
-        valfmt="%d",
-    )
-    save_button = Button(
-        save_ax,
-        "",
-        image=save_icon,
-        color="none",
-        hovercolor="none",
-    )
-    save_ax.set_axis_off()
-
-    fig.canvas.draw()
-    image_artist.set_animated(True)
-    background = fig.canvas.copy_from_bbox(ax.bbox)
-
-    def redraw_image(_event=None):
-        fig.canvas.restore_region(background)
-        ax.draw_artist(image_artist)
-        fig.canvas.blit(ax.bbox)
-
-    def update(index):
-        index = round(index)
-        image_artist.set_data(images[index])
-        slider.valtext.set_text(observations[index].readable_time)
-        fig.canvas.draw_idle()
-
-    def save(_event):
-        output_path.parent.mkdir(exist_ok=True)
-        selected = observations[round(slider.val)]
-        image = render_image(selected, sprite_path, 1600, 1200)
-        plt.imsave(output_path, image)
-        print(f"saved {output_path}")
-
-    fig.canvas.mpl_connect("draw_event", redraw_image)
-    slider.on_changed(update)
-    save_button.on_clicked(save)
-    slider.valtext.set_text(observations[initial_index].readable_time)
-    redraw_image()
-    plt.show()
-    plt.close(fig)
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
+                index = max(0, index - 1)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
+                index = min(len(observations) - 1, index + 1)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                width, height = window.get_size()
+                scene_height = min(height - 90, round(width * 3 / 4))
+                scene_width = round(scene_height * 4 / 3)
+                left = (width - scene_width) // 2
+                if height - 75 <= event.pos[1] <= height - 25 and scene_width:
+                    dragging_slider = True
+                    update_slider(event.pos)
+                elif width - 110 <= event.pos[0] <= width - 25 and height - 75 <= event.pos[1] <= height - 15:
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    image = _draw_scene(observations[index], sprite_path, fonts, (1600, 1200))
+                    pygame.image.save(image, str(output_path))
+                    print(f"saved {output_path}")
+            elif event.type == pygame.MOUSEMOTION and dragging_slider:
+                update_slider(event.pos)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                dragging_slider = False
+        width, height = window.get_size()
+        scene_height = min(height - 90, round(width * 3 / 4))
+        scene_width = round(scene_height * 4 / 3)
+        scene = _draw_scene(observations[index], sprite_path, fonts, (scene_width, scene_height))
+        window.fill("#111111")
+        left = (width - scene_width) // 2
+        window.blit(scene, (left, 0))
+        pygame.draw.line(window, "#777777", (left, height - 50), (left + scene_width, height - 50), 4)
+        knob = left + round(scene_width * index / max(1, len(observations) - 1))
+        pygame.draw.circle(window, "#43d17a", (knob, height - 50), 9)
+        font = _font(fonts, 18)
+        window.blit(font.render(observations[index].readable_time, True, "white"), (left, height - 85))
+        if icon:
+            button = pygame.transform.smoothscale(icon, (42, 42))
+            window.blit(button, (width - 82, height - 70))
+        pygame.display.flip()
+        clock.tick(30)
+    pygame.quit()
