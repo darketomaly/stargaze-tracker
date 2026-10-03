@@ -20,6 +20,8 @@ OUT = HERE / "out"
 PICTURE = "plot.png"
 SPRITE = HERE / "sprites" / "cloud.png"
 FONT_DIR = HERE / "fonts"
+MINUTES_PER_STEP = 10
+STEPS_PER_HOUR = 60 // MINUTES_PER_STEP
 
 
 def interpolate_angle(start, end, fraction):
@@ -28,7 +30,9 @@ def interpolate_angle(start, end, fraction):
 
 
 def interpolate_observation(start, end, fraction):
-    time = start.time + timedelta(minutes=15 * round(fraction * 4))
+    time = start.time + timedelta(
+        minutes=MINUTES_PER_STEP * round(fraction * STEPS_PER_HOUR)
+    )
     return replace(
         start,
         time=time,
@@ -85,9 +89,11 @@ def main():
     for index, observation in enumerate(hourly_observations):
         if index + 1 < len(hourly_observations):
             following = hourly_observations[index + 1]
-            for quarter in range(4):
+            for step in range(STEPS_PER_HOUR):
                 observations.append(
-                    interpolate_observation(observation, following, quarter / 4)
+                    interpolate_observation(
+                        observation, following, step / STEPS_PER_HOUR
+                    )
                 )
         else:
             observations.append(observation)
