@@ -44,6 +44,7 @@ def moon_image(phase, size):
     surface = pygame.Surface((size, size), pygame.SRCALPHA)
     radius = size / 2 - 1
     angle = 2 * math.pi * phase
+    illuminated = set()
     for py in range(size):
         for px in range(size):
             x = (px - size / 2) / radius
@@ -51,8 +52,21 @@ def moon_image(phase, size):
             if x * x + y * y <= 1:
                 z = math.sqrt(max(0, 1 - x * x - y * y))
                 if x * math.sin(angle) + z * math.cos(angle) > 0:
-                    surface.set_at((px, py), (217, 217, 217, 255))
-    pygame.draw.circle(surface, (0, 0, 0, 220), (size // 2, size // 2), round(radius), 2)
+                    illuminated.add((px, py))
+
+    outline = set()
+    for px, py in illuminated:
+        for offset_x in (-1, 0, 1):
+            for offset_y in (-1, 0, 1):
+                neighbor = (px + offset_x, py + offset_y)
+                if neighbor not in illuminated and (
+                    0 <= neighbor[0] < size and 0 <= neighbor[1] < size
+                ):
+                    outline.add(neighbor)
+    for px, py in outline:
+        surface.set_at((px, py), (0, 0, 0, 220))
+    for px, py in illuminated:
+        surface.set_at((px, py), (217, 217, 217, 255))
     return surface
 
 
