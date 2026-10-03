@@ -2,6 +2,7 @@
 
 import math
 import random
+from io import BytesIO
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -185,12 +186,11 @@ def maximize_window(window):
 
 def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     register_fonts(font_dir)
+    plt.rcParams["toolbar"] = "None"
     window = None
     width, height = 800, 640
     fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
     window = getattr(fig.canvas.manager, "window", None)
-    if window is not None:
-        maximize_window(window)
 
     ax.axis("off")
     loading_text = ax.text(
@@ -200,6 +200,10 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     plt.show(block=False)
     fig.canvas.draw()
     fig.canvas.flush_events()
+    if window is not None:
+        maximize_window(window)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
     width, height = fig.canvas.get_width_height()
 
     images = []
@@ -218,6 +222,22 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     ax.axis("off")
     slider_ax = fig.add_axes((0.15, 0.04, 0.56, 0.04))
     save_ax = fig.add_axes((0.80, 0.035, 0.07, 0.05))
+    save_icon_path = sprite_path.with_name("icon_save.png")
+    save_icon = imread(
+        BytesIO(save_icon_path.read_bytes()),
+        format="webp",
+    )
+    icon_size = round(save_icon.shape[0] * 0.7)
+    icon_indices = np.linspace(
+        0, save_icon.shape[0] - 1, icon_size,
+    ).astype(int)
+    resized_icon = save_icon[np.ix_(icon_indices, icon_indices)]
+    icon_padding = (save_icon.shape[0] - icon_size) // 2
+    save_icon = np.zeros_like(save_icon)
+    save_icon[
+        icon_padding:icon_padding + icon_size,
+        icon_padding:icon_padding + icon_size,
+    ] = resized_icon
     slider = Slider(
         slider_ax,
         "Time",
@@ -227,7 +247,14 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         valstep=1,
         valfmt="%d",
     )
-    save_button = Button(save_ax, "Save")
+    save_button = Button(
+        save_ax,
+        "",
+        image=save_icon,
+        color="none",
+        hovercolor="none",
+    )
+    save_ax.set_axis_off()
 
     fig.canvas.draw()
     image_artist.set_animated(True)
