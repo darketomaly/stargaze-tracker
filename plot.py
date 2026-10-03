@@ -41,6 +41,10 @@ def interpolate_observation(start, end, fraction):
             start.coverage_fraction
             + (end.coverage_fraction - start.coverage_fraction) * fraction
         ),
+        visibility_meters=(
+            start.visibility_meters
+            + (end.visibility_meters - start.visibility_meters) * fraction
+        ),
         stargaze_score=(
             start.stargaze_score
             + (end.stargaze_score - start.stargaze_score) * fraction

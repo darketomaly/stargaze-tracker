@@ -104,9 +104,22 @@ def draw_information_panel(ax, observation):
             ha="left", va="top", fontsize=11, color="#bfbfbf", zorder=4)
 
 
-def draw_score_panel(ax, score):
+def score_explanation(observation):
+    if observation.sun_altitude >= 0:
+        return "Daylight"
+    if observation.cloud_coverage >= 70:
+        return "Heavy cloud cover"
+    if observation.visibility_meters < 5000:
+        return "Poor visibility"
+    if observation.moon_illumination >= 70 and observation.moon_altitude > 0:
+        return "Bright moonlight"
+    return "Limited conditions"
+
+
+def draw_score_panel(ax, observation):
+    score = observation.stargaze_score
     score_color = "#43d17a" if score >= 50 else "#ff5c5c"
-    ax.add_patch(Rectangle((-0.05, 0.18), 2.2, 0.55,
+    ax.add_patch(Rectangle((-0.05, 0.08), 2.2, 0.68,
                            facecolor="black", alpha=0.65, edgecolor="none",
                            zorder=3))
     ax.text(0.05, 0.35, "Chance of good stargazing:",
@@ -115,6 +128,9 @@ def draw_score_panel(ax, score):
     ax.text(1.85, 0.35, f"{score:.0f}%",
             ha="left", va="bottom", fontsize=11, fontweight="bold",
             color=score_color, zorder=4)
+    if score < 50:
+        ax.text(0.05, 0.16, score_explanation(observation),
+                ha="left", va="bottom", fontsize=9, color="#bfbfbf", zorder=4)
 
 
 def render_image(observation, sprite_path, width, height):
@@ -160,7 +176,7 @@ def render_image(observation, sprite_path, width, height):
         )
     draw_clouds(ax, observation.coverage_fraction, sprite_path)
     draw_information_panel(ax, observation)
-    draw_score_panel(ax, observation.stargaze_score)
+    draw_score_panel(ax, observation)
 
     ax.set_xlim(0, 8)
     ax.set_ylim(0, 6)

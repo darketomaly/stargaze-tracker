@@ -18,6 +18,7 @@ class Observation:
     cloud_coverage: float
     coverage_fraction: float
     visibility: str
+    visibility_meters: float
     stargaze_score: float
     moon_phase: float
     moon_illumination: float
@@ -75,6 +76,7 @@ def load_observation(path, row_index=None):
         cloud_coverage=cloud_coverage,
         coverage_fraction=max(0, min(cloud_coverage, 100)) / 100,
         visibility=format_visibility(float(selected["visibility"])),
+        visibility_meters=float(selected["visibility"]),
         stargaze_score=float(selected["stargaze_score"]),
         moon_phase=float(selected["moon_phase"]),
         moon_illumination=float(selected["moon_illumination"]),
