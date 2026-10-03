@@ -3,6 +3,8 @@
 import math
 import os
 import random
+import sys
+import ctypes
 from io import BytesIO
 from pathlib import Path
 
@@ -131,6 +133,15 @@ def _load_image(path):
     # The save icon is named .png for historical reasons, but its bytes are WebP.
     hint = "image.webp" if data[:4] == b"RIFF" and b"WEBP" in data[:16] else str(path)
     return pygame.image.load(BytesIO(data), hint).convert_alpha()
+
+
+def _maximize_window():
+    """Maximize the window without switching to fullscreen mode."""
+    if sys.platform != "win32":
+        return
+    window_handle = pygame.display.get_wm_info().get("window")
+    if window_handle:
+        ctypes.windll.user32.ShowWindow(window_handle, 3)
 
 
 def _atmosphere_layout(observation):
@@ -320,6 +331,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         pygame.RESIZABLE,
     )
     pygame.display.set_caption("Stargazing sky")
+    _maximize_window()
     clock = pygame.time.Clock()
     index = max(0, min(initial_index, len(observations) - 1))
     animation_from = None
