@@ -81,9 +81,10 @@ def _interpolate_wrapped(start, end, fraction, period):
 def _interpolate_observation(start, end, fraction):
     """Interpolate the visual values that change when the selected time changes."""
     fraction = max(0, min(1, fraction))
+    time = start.time + (end.time - start.time) * fraction
     return start.__class__(
-        time=start.time + (end.time - start.time) * fraction,
-        readable_time=end.readable_time if fraction >= .5 else start.readable_time,
+        time=time,
+        readable_time=time.strftime("%I:%M %p").lstrip("0"),
         cloud_coverage=start.cloud_coverage + (end.cloud_coverage - start.cloud_coverage) * fraction,
         coverage_fraction=start.coverage_fraction + (end.coverage_fraction - start.coverage_fraction) * fraction,
         visibility=end.visibility if fraction >= .5 else start.visibility,
@@ -211,7 +212,7 @@ def _interpolate_layout(start, end, fraction):
     ]
     clouds = [
         (
-            _interpolate_wrapped(start_cloud[0], end_cloud[0], fraction, 1),
+            start_cloud[0] + (end_cloud[0] - start_cloud[0]) * fraction,
             start_cloud[1] + (end_cloud[1] - start_cloud[1]) * fraction,
             start_cloud[2] + (end_cloud[2] - start_cloud[2]) * fraction,
             start_cloud[3] + (end_cloud[3] - start_cloud[3]) * fraction,
