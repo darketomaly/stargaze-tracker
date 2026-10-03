@@ -15,7 +15,8 @@ from plot_data import TIMEZONE, lerp_color
 
 CLOUD_DRIFT_PERIOD = 60 * 60
 CLOUD_DRIFT_SPEED = 1 / CLOUD_DRIFT_PERIOD
-SCENE_CROSSFADE_DURATION = 0.15
+SCENE_ANIMATION_DURATION = 0.45
+STAR_SEED = 317
 
 
 def register_fonts(font_dir):
@@ -67,15 +68,36 @@ def _draw_gradient(surface, color, seed):
         pygame.draw.line(surface, current, (0, height - y - 1), (width, height - y - 1))
 
 
-def _draw_stars(surface, score, rng):
-    width, height = surface.get_size()
-    for _ in range(round(120 * max(0, min(score, 100)) / 100)):
-        x, y = rng.randrange(width), rng.randrange(height)
-        radius = max(1, round(rng.uniform(1, 2.5)))
-        color = (255, 244, 194, round(rng.uniform(100, 255)))
-        star = pygame.Surface((radius * 2 + 1, radius * 2 + 1), pygame.SRCALPHA)
-        pygame.draw.circle(star, color, (radius, radius), radius)
-        surface.blit(star, (x - radius, y - radius))
+def _interpolate_angle(start, end, fraction):
+    difference = (end - start + 180) % 360 - 180
+    return (start + difference * fraction) % 360
+
+
+def _interpolate_wrapped(start, end, fraction, period):
+    difference = (end - start + period / 2) % period - period / 2
+    return start + difference * fraction
+
+
+def _interpolate_observation(start, end, fraction):
+    """Interpolate the visual values that change when the selected time changes."""
+    fraction = max(0, min(1, fraction))
+    return start.__class__(
+        time=start.time + (end.time - start.time) * fraction,
+        readable_time=end.readable_time if fraction >= .5 else start.readable_time,
+        cloud_coverage=start.cloud_coverage + (end.cloud_coverage - start.cloud_coverage) * fraction,
+        coverage_fraction=start.coverage_fraction + (end.coverage_fraction - start.coverage_fraction) * fraction,
+        visibility=end.visibility if fraction >= .5 else start.visibility,
+        visibility_meters=start.visibility_meters + (end.visibility_meters - start.visibility_meters) * fraction,
+        stargaze_score=start.stargaze_score + (end.stargaze_score - start.stargaze_score) * fraction,
+        moon_phase=_interpolate_wrapped(start.moon_phase, end.moon_phase, fraction, 1),
+        moon_illumination=start.moon_illumination + (end.moon_illumination - start.moon_illumination) * fraction,
+        moon_altitude=start.moon_altitude + (end.moon_altitude - start.moon_altitude) * fraction,
+        moon_azimuth=_interpolate_angle(start.moon_azimuth, end.moon_azimuth, fraction),
+        moon_name=end.moon_name if fraction >= .5 else start.moon_name,
+        sun_altitude=start.sun_altitude + (end.sun_altitude - start.sun_altitude) * fraction,
+        sun_azimuth=_interpolate_angle(start.sun_azimuth, end.sun_azimuth, fraction),
+        daylight_brightness=start.daylight_brightness + (end.daylight_brightness - start.daylight_brightness) * fraction,
+    )
 
 
 def _load_image(path):
@@ -85,7 +107,42 @@ def _load_image(path):
     return pygame.image.load(BytesIO(data), hint).convert_alpha()
 
 
-def _draw_scene(observation, sprite_path, fonts, size, include_atmosphere=True):
+def _atmosphere_layout(observation):
+    """Create stable star slots and animated cloud slots."""
+    # Stars are decorative background points, not a new random field for each
+    # observation. Keeping their identities fixed prevents visible shuffling
+    # while their visibility changes with the stargazing score.
+    star_rng = random.Random(STAR_SEED)
+    stars = []
+    for index in range(120):
+        brightness = star_rng.uniform(100, 255)
+        stars.append((
+            star_rng.random(),
+            star_rng.random(),
+            max(1, round(star_rng.uniform(1, 2.5))),
+            brightness
+            if index < round(120 * max(0, min(observation.stargaze_score, 100)) / 100)
+            else 0,
+        ))
+
+    cloud_rng = random.Random(observation.time.date().toordinal())
+    positions = [(x, y) for x in range(8) for y in range(6)]
+    cloud_rng.shuffle(positions)
+    clouds = []
+    for index, (x, y) in enumerate(positions):
+        clouds.append((
+            (x + cloud_rng.uniform(-.15, .15)) / 8
+            + observation.time.timestamp() * CLOUD_DRIFT_SPEED / 8,
+            (y + 1 + cloud_rng.uniform(-.15, .15)) / 6,
+            cloud_rng.uniform(.55, 1) * 255
+            if index < round(len(positions) * observation.coverage_fraction)
+            else 0,
+            cloud_rng.uniform(-12, 12),
+        ))
+    return stars, clouds
+
+
+def _draw_scene(observation, sprite_path, fonts, size, atmosphere_layout=None):
     width, height = size
     background = lerp_color((.01, .02, .10), (.35, .70, .95),
                              observation.daylight_brightness)
@@ -103,34 +160,65 @@ def _draw_scene(observation, sprite_path, fonts, size, include_atmosphere=True):
         moon = moon_image(observation.moon_phase, round(scale * .9))
         scene.blit(moon, (moon_x - moon.get_width() // 2, moon_y - moon.get_height() // 2))
 
-    if include_atmosphere:
-        scene.blit(_draw_atmosphere(observation, sprite_path, size), (0, 0))
+    if atmosphere_layout is not None:
+        scene.blit(
+            _draw_atmosphere(observation, sprite_path, size, atmosphere_layout),
+            (0, 0),
+        )
     _draw_scene_details(scene, observation, fonts, scale, width)
     return scene
 
 
-def _draw_atmosphere(observation, sprite_path, size):
+def _draw_atmosphere(observation, sprite_path, size, layout=None):
     width, height = size
-    timestamp = observation.time.timestamp()
     atmosphere = pygame.Surface(size, pygame.SRCALPHA)
-    _draw_stars(atmosphere, observation.stargaze_score, random.Random(timestamp))
+    if layout is None:
+        layout = _atmosphere_layout(observation)
+    stars, clouds = layout
+    for x, y, radius, alpha in stars:
+        if alpha:
+            star = pygame.Surface((radius * 2 + 1, radius * 2 + 1), pygame.SRCALPHA)
+            pygame.draw.circle(star, (255, 244, 194, round(alpha)), (radius, radius), radius)
+            atmosphere.blit(star, (round(x * width) - radius, round(y * height) - radius))
+
     scale = width / 8
     cloud = _load_image(sprite_path)
-    cloud_rng = random.Random(observation.time.date().toordinal())
-    horizontal_offset = timestamp * CLOUD_DRIFT_SPEED
-    positions = [(x, y) for x in range(8) for y in range(6)]
-    cloud_rng.shuffle(positions)
-    for x, y in positions[:round(len(positions) * observation.coverage_fraction)]:
+    for x, y, alpha, angle in clouds:
+        if not alpha:
+            continue
+        x %= 1
+        y = 1 - y
         cloud_size = round(scale)
         sprite = pygame.transform.smoothscale(cloud, (cloud_size, cloud_size))
-        sprite.set_alpha(round(cloud_rng.uniform(.55, 1) * 255))
-        sprite = pygame.transform.rotate(sprite, cloud_rng.uniform(-12, 12))
-        left = round(
-            ((x + cloud_rng.uniform(-.15, .15) + horizontal_offset) % 8) * scale
-        )
-        top = round(height - (y + 1 + cloud_rng.uniform(-.15, .15)) * scale)
-        atmosphere.blit(sprite, (left, top))
+        sprite.set_alpha(round(alpha))
+        sprite = pygame.transform.rotate(sprite, angle)
+        atmosphere.blit(sprite, (
+            round(x * width - sprite.get_width() / 2),
+            round(y * height - sprite.get_height() / 2),
+        ))
     return atmosphere
+
+
+def _interpolate_layout(start, end, fraction):
+    stars = [
+        (
+            start_star[0] + (end_star[0] - start_star[0]) * fraction,
+            start_star[1] + (end_star[1] - start_star[1]) * fraction,
+            start_star[2] if fraction < .5 else end_star[2],
+            start_star[3] + (end_star[3] - start_star[3]) * fraction,
+        )
+        for start_star, end_star in zip(start[0], end[0])
+    ]
+    clouds = [
+        (
+            _interpolate_wrapped(start_cloud[0], end_cloud[0], fraction, 1),
+            start_cloud[1] + (end_cloud[1] - start_cloud[1]) * fraction,
+            start_cloud[2] + (end_cloud[2] - start_cloud[2]) * fraction,
+            start_cloud[3] + (end_cloud[3] - start_cloud[3]) * fraction,
+        )
+        for start_cloud, end_cloud in zip(start[1], end[1])
+    ]
+    return stars, clouds
 
 
 def _draw_scene_details(scene, observation, fonts, scale, width):
@@ -191,9 +279,10 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     pygame.display.set_caption("Stargazing sky")
     clock = pygame.time.Clock()
     index = max(0, min(initial_index, len(observations) - 1))
-    displayed_atmosphere = None
-    transition_from = None
-    transition_started = 0
+    animation_from = None
+    animation_layout_from = None
+    animation_layout_to = None
+    animation_started = 0
     save_icon_path = Path(sprite_path).with_name("icon_save.png")
     try:
         icon = _load_image(save_icon_path)
@@ -202,12 +291,32 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
     dragging_slider = False
 
     def set_index(new_index):
-        nonlocal index, transition_from, transition_started
+        nonlocal index, animation_from, animation_layout_from
+        nonlocal animation_layout_to, animation_started
         new_index = max(0, min(new_index, len(observations) - 1))
-        if new_index != index and displayed_atmosphere is not None:
-            transition_from = displayed_atmosphere.copy()
-            transition_from.set_alpha(255)
-            transition_started = pygame.time.get_ticks()
+        if new_index == index:
+            return
+        now = pygame.time.get_ticks()
+        if animation_from is not None:
+            fraction = min(
+                1,
+                (now - animation_started) / (SCENE_ANIMATION_DURATION * 1000),
+            )
+            current = _interpolate_observation(
+                animation_from, observations[index], fraction
+            )
+            current_layout = _interpolate_layout(
+                animation_layout_from,
+                animation_layout_to,
+                fraction,
+            )
+        else:
+            current = observations[index]
+            current_layout = _atmosphere_layout(current)
+        animation_from = current
+        animation_layout_from = current_layout
+        animation_layout_to = _atmosphere_layout(observations[new_index])
+        animation_started = now
         index = new_index
 
     def update_slider(position):
@@ -238,7 +347,13 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                     update_slider(event.pos)
                 elif width - 110 <= event.pos[0] <= width - 25 and height - 75 <= event.pos[1] <= height - 15:
                     output_path.parent.mkdir(parents=True, exist_ok=True)
-                    image = _draw_scene(observations[index], sprite_path, fonts, (1600, 1200))
+                    image = _draw_scene(
+                        observations[index],
+                        sprite_path,
+                        fonts,
+                        (1600, 1200),
+                        _atmosphere_layout(observations[index]),
+                    )
                     pygame.image.save(image, str(output_path))
                     print(f"saved {output_path}")
             elif event.type == pygame.MOUSEMOTION and dragging_slider:
@@ -249,38 +364,45 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         scene_height = min(height - 90, round(width * 3 / 4))
         scene_width = round(scene_height * 4 / 3)
         scene_size = (scene_width, scene_height)
+        now = pygame.time.get_ticks()
+        if animation_from is not None:
+            progress = min(
+                1,
+                (now - animation_started) / (SCENE_ANIMATION_DURATION * 1000),
+            )
+            displayed_observation = _interpolate_observation(
+                animation_from, observations[index], progress
+            )
+            displayed_layout = _interpolate_layout(
+                animation_layout_from,
+                animation_layout_to,
+                progress,
+            )
+            if progress >= 1:
+                animation_from = None
+                animation_layout_from = None
+                animation_layout_to = None
+        else:
+            displayed_observation = observations[index]
+            displayed_layout = _atmosphere_layout(displayed_observation)
         scene = _draw_scene(
-            observations[index],
+            displayed_observation,
             sprite_path,
             fonts,
             scene_size,
-            include_atmosphere=False,
         )
         atmosphere = _draw_atmosphere(
-            observations[index], sprite_path, scene_size
+            displayed_observation,
+            sprite_path,
+            scene_size,
+            displayed_layout,
         )
         window.fill("#111111")
         left = (width - scene_width) // 2
         displayed_scene = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
-        if transition_from is not None:
-            progress = min(
-                1,
-                (pygame.time.get_ticks() - transition_started)
-                / (SCENE_CROSSFADE_DURATION * 1000),
-            )
-            transition_from.set_alpha(round((1 - progress) * 255))
-            atmosphere.set_alpha(round(progress * 255))
-            displayed_scene.blit(scene, (0, 0))
-            displayed_scene.blit(transition_from, (0, 0))
-            displayed_scene.blit(atmosphere, (0, 0))
-            if progress >= 1:
-                transition_from = None
-        else:
-            displayed_scene.blit(scene, (0, 0))
-            displayed_scene.blit(atmosphere, (0, 0))
+        displayed_scene.blit(scene, (0, 0))
+        displayed_scene.blit(atmosphere, (0, 0))
         window.blit(displayed_scene, (left, 0))
-        displayed_atmosphere = atmosphere.copy()
-        displayed_atmosphere.set_alpha(255)
         pygame.draw.line(window, "#777777", (left, height - 50), (left + scene_width, height - 50), 4)
         knob = left + round(scene_width * index / max(1, len(observations) - 1))
         pygame.draw.circle(window, "#43d17a", (knob, height - 50), 9)

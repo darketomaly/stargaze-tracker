@@ -53,7 +53,7 @@ def interpolate_observation(start, end, fraction):
             start.stargaze_score
             + (end.stargaze_score - start.stargaze_score) * fraction
         ),
-        moon_phase=start.moon_phase + (end.moon_phase - start.moon_phase) * fraction,
+        moon_phase=interpolate_angle(start.moon_phase * 360, end.moon_phase * 360, fraction) / 360,
         moon_illumination=(
             start.moon_illumination
             + (end.moon_illumination - start.moon_illumination) * fraction
@@ -70,8 +70,7 @@ def interpolate_observation(start, end, fraction):
             + (end.sun_altitude - start.sun_altitude) * fraction
         ),
         sun_azimuth=(
-            start.sun_azimuth
-            + (end.sun_azimuth - start.sun_azimuth) * fraction
+            interpolate_angle(start.sun_azimuth, end.sun_azimuth, fraction)
         ),
         daylight_brightness=(
             start.daylight_brightness
