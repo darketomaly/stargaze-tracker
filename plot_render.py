@@ -157,13 +157,22 @@ def _atmosphere_layout(observation):
     return stars, clouds
 
 
-def _draw_scene(observation, sprite_path, fonts, size, atmosphere_layout=None):
+def _draw_scene(
+    observation,
+    sprite_path,
+    fonts,
+    size,
+    atmosphere_layout=None,
+    ui_size=None,
+):
     width, height = size
+    ui_width = width if ui_size is None else ui_size[0]
+    ui_scale = ui_width / 8
     background = lerp_color((.01, .02, .10), (.35, .70, .95),
                              observation.daylight_brightness)
     scene = pygame.Surface(size)
     _draw_gradient(scene, background, observation.time.date().toordinal())
-    scale = width / 8
+    scale = min(width / 8, height / 6)
     sun_x = round(observation.sun_azimuth / 360 * width)
     sun_y = round(height - max(0, min(6, observation.sun_altitude / 90 * 6)) * scale)
     moon_x = round(observation.moon_azimuth / 360 * width)
@@ -180,7 +189,7 @@ def _draw_scene(observation, sprite_path, fonts, size, atmosphere_layout=None):
             _draw_atmosphere(observation, sprite_path, size, atmosphere_layout),
             (0, 0),
         )
-    _draw_scene_details(scene, observation, fonts, scale, width)
+    _draw_scene_details(scene, observation, fonts, ui_scale, ui_width)
     return scene
 
 
@@ -196,7 +205,7 @@ def _draw_atmosphere(observation, sprite_path, size, layout=None):
             pygame.draw.circle(star, (255, 244, 194, round(alpha)), (radius, radius), radius)
             atmosphere.blit(star, (round(x * width) - radius, round(y * height) - radius))
 
-    scale = width / 8
+    scale = min(width / 8, height / 6)
     cloud = _load_image(sprite_path)
     for x, y, alpha, angle in clouds:
         if not alpha:
@@ -341,7 +350,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         width, height = window.get_size()
         scene_height = min(height - 90, round(width * 3 / 4))
         scene_width = round(scene_height * 4 / 3)
-        left = (width - scene_width) // 2
+        left = 0
         if scene_width:
             fraction = max(0, min(1, (position[0] - left) / scene_width))
             set_index(round(fraction * (len(observations) - 1)))
@@ -359,7 +368,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                 width, height = window.get_size()
                 scene_height = min(height - 90, round(width * 3 / 4))
                 scene_width = round(scene_height * 4 / 3)
-                left = (width - scene_width) // 2
+                left = 0
                 if height - 75 <= event.pos[1] <= height - 25 and scene_width:
                     dragging_slider = True
                     update_slider(event.pos)
@@ -371,6 +380,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                         fonts,
                         (1600, 1200),
                         _atmosphere_layout(observations[index]),
+                        (1600, 1200),
                     )
                     pygame.image.save(image, str(output_path))
                     print(f"saved {output_path}")
@@ -379,9 +389,10 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
             elif event.type == pygame.MOUSEBUTTONUP:
                 dragging_slider = False
         width, height = window.get_size()
-        scene_height = min(height - 90, round(width * 3 / 4))
-        scene_width = round(scene_height * 4 / 3)
-        scene_size = (scene_width, scene_height)
+        slider_height = min(height - 90, round(width * 3 / 4))
+        slider_width = round(slider_height * 4 / 3)
+        scene_size = (width, height)
+        ui_size = (slider_width, slider_height)
         if dragging_slider:
             update_slider(pygame.mouse.get_pos())
         now = pygame.time.get_ticks()
@@ -410,6 +421,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
             sprite_path,
             fonts,
             scene_size,
+            ui_size=ui_size,
         )
         atmosphere = _draw_atmosphere(
             displayed_observation,
@@ -418,16 +430,15 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
             displayed_layout,
         )
         window.fill("#111111")
-        left = (width - scene_width) // 2
         displayed_scene = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
         displayed_scene.blit(scene, (0, 0))
         displayed_scene.blit(atmosphere, (0, 0))
-        window.blit(displayed_scene, (left, 0))
-        pygame.draw.line(window, "#777777", (left, height - 50), (left + scene_width, height - 50), 4)
-        knob = left + round(scene_width * slider_fraction)
+        window.blit(displayed_scene, (0, 0))
+        pygame.draw.line(window, "#777777", (0, height - 50), (slider_width, height - 50), 4)
+        knob = round(slider_width * slider_fraction)
         pygame.draw.circle(window, "#43d17a", (knob, height - 50), 9)
         font = _font(fonts, 18)
-        window.blit(font.render(observations[index].readable_time, True, "white"), (left, height - 85))
+        window.blit(font.render(displayed_observation.readable_time, True, "white"), (0, height - 85))
         if icon:
             button = pygame.transform.smoothscale(icon, (42, 42))
             window.blit(button, (width - 82, height - 70))
