@@ -13,6 +13,10 @@ import pygame
 from plot_data import TIMEZONE, lerp_color
 
 
+CLOUD_DRIFT_PERIOD = 60 * 60
+CLOUD_DRIFT_SPEED = 1 / CLOUD_DRIFT_PERIOD
+
+
 def register_fonts(font_dir):
     """Return the bundled Rajdhani font paths (Pygame loads fonts explicitly)."""
     return {
@@ -86,8 +90,8 @@ def _draw_scene(observation, sprite_path, fonts, size):
                              observation.daylight_brightness)
     scene = pygame.Surface(size)
     _draw_gradient(scene, background, observation.time.timestamp())
-    rng = random.Random(observation.time.timestamp())
-    _draw_stars(scene, observation.stargaze_score, rng)
+    timestamp = observation.time.timestamp()
+    _draw_stars(scene, observation.stargaze_score, random.Random(timestamp))
     scale = width / 8
     sun_x = round(observation.sun_azimuth / 360 * width)
     sun_y = round(height - max(0, min(6, observation.sun_altitude / 90 * 6)) * scale)
@@ -101,15 +105,19 @@ def _draw_scene(observation, sprite_path, fonts, size):
         scene.blit(moon, (moon_x - moon.get_width() // 2, moon_y - moon.get_height() // 2))
 
     cloud = _load_image(sprite_path)
+    cloud_rng = random.Random(observation.time.date().toordinal())
+    horizontal_offset = timestamp * CLOUD_DRIFT_SPEED
     positions = [(x, y) for x in range(8) for y in range(6)]
-    rng.shuffle(positions)
+    cloud_rng.shuffle(positions)
     for x, y in positions[:round(len(positions) * observation.coverage_fraction)]:
         cloud_size = round(scale)
         sprite = pygame.transform.smoothscale(cloud, (cloud_size, cloud_size))
-        sprite.set_alpha(round(rng.uniform(.55, 1) * 255))
-        sprite = pygame.transform.rotate(sprite, rng.uniform(-12, 12))
-        left = round((x + rng.uniform(-.15, .15)) * scale)
-        top = round(height - (y + 1 + rng.uniform(-.15, .15)) * scale)
+        sprite.set_alpha(round(cloud_rng.uniform(.55, 1) * 255))
+        sprite = pygame.transform.rotate(sprite, cloud_rng.uniform(-12, 12))
+        left = round(
+            ((x + cloud_rng.uniform(-.15, .15) + horizontal_offset) % 8) * scale
+        )
+        top = round(height - (y + 1 + cloud_rng.uniform(-.15, .15)) * scale)
         scene.blit(sprite, (left, top))
 
     regular = _font(fonts, width / 72)

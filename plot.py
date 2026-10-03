@@ -20,7 +20,7 @@ OUT = HERE / "out"
 PICTURE = "plot.png"
 SPRITE = HERE / "sprites" / "cloud.png"
 FONT_DIR = HERE / "fonts"
-MINUTES_PER_STEP = 10
+MINUTES_PER_STEP = 1
 STEPS_PER_HOUR = 60 // MINUTES_PER_STEP
 
 
