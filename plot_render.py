@@ -158,6 +158,35 @@ def _load_landscape_sprite(path):
     )).copy()
 
 
+def _draw_day_night(surface, observation, day_sprite, night_sprite):
+    if not day_sprite or not night_sprite:
+        return
+    width, height = surface.get_size()
+    max_width = min(
+        DAY_NIGHT_SPRITE_SIZE[0],
+        width - 2 * DAY_NIGHT_RIGHT_PADDING,
+    )
+    max_height = min(
+        DAY_NIGHT_SPRITE_SIZE[1],
+        height - DAY_NIGHT_BOTTOM_PADDING,
+    )
+    aspect = day_sprite.get_width() / day_sprite.get_height()
+    day_night_width = min(max_width, round(max_height * aspect))
+    day_night_size = (
+        day_night_width,
+        round(day_night_width / aspect),
+    )
+    day = pygame.transform.smoothscale(day_sprite, day_night_size)
+    night = pygame.transform.smoothscale(night_sprite, day_night_size)
+    night.set_alpha(round(
+        max(0, min(1, 1 - observation.daylight_brightness)) * 255
+    ))
+    sprite_left = width - day_night_size[0] - DAY_NIGHT_RIGHT_PADDING
+    sprite_top = height - day_night_size[1] - DAY_NIGHT_BOTTOM_PADDING
+    surface.blit(day, (sprite_left, sprite_top))
+    surface.blit(night, (sprite_left, sprite_top))
+
+
 def _maximize_window():
     """Maximize the window without switching to fullscreen mode."""
     if sys.platform != "win32":
@@ -441,13 +470,28 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                 )
                 if save_rect.collidepoint(event.pos) and icon:
                     output_path.parent.mkdir(parents=True, exist_ok=True)
+                    save_width, save_height = window.get_size()
+                    save_ui_height = min(
+                        save_height - 90,
+                        round(save_width * 3 / 4),
+                    )
+                    save_ui_size = (
+                        round(save_ui_height * 4 / 3),
+                        save_ui_height,
+                    )
                     image = _draw_scene(
                         observations[index],
                         sprite_path,
                         fonts,
-                        (1600, 1200),
+                        (save_width, save_height),
                         _atmosphere_layout(observations[index]),
-                        (1600, 1200),
+                        save_ui_size,
+                    )
+                    _draw_day_night(
+                        image,
+                        observations[index],
+                        day_sprite,
+                        night_sprite,
                     )
                     pygame.image.save(image, str(output_path))
                     save_punch_started = now
@@ -506,31 +550,12 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         displayed_scene = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
         displayed_scene.blit(scene, (0, 0))
         window.blit(displayed_scene, (0, 0))
-        if day_sprite and night_sprite:
-            max_width = min(
-                DAY_NIGHT_SPRITE_SIZE[0],
-                width - 2 * DAY_NIGHT_RIGHT_PADDING,
-            )
-            max_height = min(
-                DAY_NIGHT_SPRITE_SIZE[1],
-                height - DAY_NIGHT_BOTTOM_PADDING,
-            )
-            aspect = day_sprite.get_width() / day_sprite.get_height()
-            day_night_width = min(max_width, round(max_height * aspect))
-            day_night_size = (
-                day_night_width,
-                round(day_night_width / aspect),
-            )
-            day = pygame.transform.smoothscale(day_sprite, day_night_size)
-            night = pygame.transform.smoothscale(night_sprite, day_night_size)
-            night.set_alpha(round(
-                max(0, min(1, 1 - displayed_observation.daylight_brightness))
-                * 255
-            ))
-            sprite_left = width - day_night_size[0] - DAY_NIGHT_RIGHT_PADDING
-            sprite_top = height - day_night_size[1] - DAY_NIGHT_BOTTOM_PADDING
-            window.blit(day, (sprite_left, sprite_top))
-            window.blit(night, (sprite_left, sprite_top))
+        _draw_day_night(
+            window,
+            displayed_observation,
+            day_sprite,
+            night_sprite,
+        )
         pygame.draw.line(
             window,
             "#777777",
