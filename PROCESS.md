@@ -10,16 +10,14 @@ would do, silently drop the rows it could not parse? -->
 
 ## Tools
 
-Matplotlib draws the generated picture, and the Rajdhani font files from Google Fonts
-are bundled in `fonts/` so the output is consistent across machines.
-
-The plotting code is separated into `plot.py` for orchestration, `plot_data.py` for
-loading and preparing the observation, and `plot_render.py` for drawing the scene
-and panels.
+Rider chat with Copilot for coding and Gemini for some sprite generation.
 
 ## Kept
 
-Rajdhani was kept because its compact, geometric letterforms fit the space-themed
-image while remaining readable at the small annotation sizes.
+Funny enough I first studied Environmental Engineering (dropped half way), but I am terrible at understanding complex biological and astronomical phenomenoms. I kept the interpretations that were generated from known data. For example, you don't need an API to tell you the moon phase, this can be calculated locally.
 
 ## Rejected
+
+At first, since the idea was to visualize data, Matplotlib was used. But this was awful. It ran very slow for artistic interpretations and it felt like trying to use a real life car with a gamepad. Sounds good but doesn't work. I ended up using pygame instead.
+
+Sometimes things are thrown from a prompt that removes previous features, introduces bugs or does not consider proper code architecture. I often reject AI code and be more explicit regarding it. For example, the entire code was being written in plot.py without proper methods or separate files.
