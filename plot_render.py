@@ -27,6 +27,7 @@ SAVE_BUTTON_GAP = 12
 SAVE_BUTTON_HOVER_SCALE = 1.12
 SAVE_BUTTON_PUNCH_DURATION = 0.28
 SAVE_FEEDBACK_DURATION = 1.2
+SLIDER_WIDTH_SCALE = 0.5
 DAY_NIGHT_SPRITE_SIZE = (520, 300)
 DAY_NIGHT_BOTTOM_PADDING = 0
 DAY_NIGHT_RIGHT_PADDING = 24
@@ -410,7 +411,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         nonlocal slider_fraction
         width, height = window.get_size()
         scene_height = min(height - 90, round(width * 3 / 4))
-        scene_width = round(scene_height * 4 / 3)
+        scene_width = round(scene_height * 4 / 3 * SLIDER_WIDTH_SCALE)
         left = (width - scene_width) // 2
         if scene_width:
             fraction = max(0, min(1, (position[0] - left) / scene_width))
@@ -429,7 +430,7 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 width, height = window.get_size()
                 scene_height = min(height - 90, round(width * 3 / 4))
-                scene_width = round(scene_height * 4 / 3)
+                scene_width = round(scene_height * 4 / 3 * SLIDER_WIDTH_SCALE)
                 left = (width - scene_width) // 2
                 slider_left = (width - scene_width) // 2
                 save_rect = pygame.Rect(
@@ -465,10 +466,11 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
                 dragging_slider = False
         width, height = window.get_size()
         slider_height = min(height - 90, round(width * 3 / 4))
-        slider_width = round(slider_height * 4 / 3)
+        ui_width = round(slider_height * 4 / 3)
+        slider_width = round(ui_width * SLIDER_WIDTH_SCALE)
         slider_left = (width - slider_width) // 2
         scene_size = (width, height)
-        ui_size = (slider_width, slider_height)
+        ui_size = (ui_width, slider_height)
         if dragging_slider:
             update_slider(pygame.mouse.get_pos())
         now = pygame.time.get_ticks()
