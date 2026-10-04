@@ -1,3 +1,8 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pygame-ce"]
+# ///
+
 """Render a prepared observation as a stargazing picture with Pygame."""
 
 import math
