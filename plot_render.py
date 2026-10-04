@@ -27,6 +27,10 @@ SAVE_BUTTON_GAP = 12
 SAVE_BUTTON_HOVER_SCALE = 1.12
 SAVE_BUTTON_PUNCH_DURATION = 0.28
 SAVE_FEEDBACK_DURATION = 1.2
+DAY_NIGHT_SPRITE_SIZE = (520, 300)
+DAY_NIGHT_BOTTOM_PADDING = 0
+DAY_NIGHT_RIGHT_PADDING = 24
+DAY_NIGHT_CROP = (.14, .015, .72, .97)
 SCENE_ANIMATION_DURATION = 0.45
 STAR_SEED = 317
 
@@ -138,6 +142,19 @@ def _load_image(path):
     # The save icon is named .png for historical reasons, but its bytes are WebP.
     hint = "image.webp" if data[:4] == b"RIFF" and b"WEBP" in data[:16] else str(path)
     return pygame.image.load(BytesIO(data), hint).convert_alpha()
+
+
+def _load_landscape_sprite(path):
+    """Load a landscape sprite without its baked outer frame."""
+    sprite = _load_image(path)
+    width, height = sprite.get_size()
+    crop_left, crop_top, crop_width, crop_height = DAY_NIGHT_CROP
+    return sprite.subsurface(pygame.Rect(
+        round(width * crop_left),
+        round(height * crop_top),
+        round(width * crop_width),
+        round(height * crop_height),
+    )).copy()
 
 
 def _maximize_window():
@@ -348,6 +365,12 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         icon = _load_image(save_icon_path)
     except pygame.error:
         icon = None
+    try:
+        day_sprite = _load_landscape_sprite(Path(sprite_path).with_name("day.png"))
+        night_sprite = _load_landscape_sprite(Path(sprite_path).with_name("night.png"))
+    except (FileNotFoundError, pygame.error):
+        day_sprite = None
+        night_sprite = None
     dragging_slider = False
     slider_fraction = index / max(1, len(observations) - 1)
     save_punch_started = None
@@ -481,6 +504,31 @@ def render(observations, sprite_path, font_dir, output_path, initial_index=0):
         displayed_scene = pygame.Surface(scene.get_size(), pygame.SRCALPHA)
         displayed_scene.blit(scene, (0, 0))
         window.blit(displayed_scene, (0, 0))
+        if day_sprite and night_sprite:
+            max_width = min(
+                DAY_NIGHT_SPRITE_SIZE[0],
+                width - 2 * DAY_NIGHT_RIGHT_PADDING,
+            )
+            max_height = min(
+                DAY_NIGHT_SPRITE_SIZE[1],
+                height - DAY_NIGHT_BOTTOM_PADDING,
+            )
+            aspect = day_sprite.get_width() / day_sprite.get_height()
+            day_night_width = min(max_width, round(max_height * aspect))
+            day_night_size = (
+                day_night_width,
+                round(day_night_width / aspect),
+            )
+            day = pygame.transform.smoothscale(day_sprite, day_night_size)
+            night = pygame.transform.smoothscale(night_sprite, day_night_size)
+            night.set_alpha(round(
+                max(0, min(1, 1 - displayed_observation.daylight_brightness))
+                * 255
+            ))
+            sprite_left = width - day_night_size[0] - DAY_NIGHT_RIGHT_PADDING
+            sprite_top = height - day_night_size[1] - DAY_NIGHT_BOTTOM_PADDING
+            window.blit(day, (sprite_left, sprite_top))
+            window.blit(night, (sprite_left, sprite_top))
         pygame.draw.line(
             window,
             "#777777",
